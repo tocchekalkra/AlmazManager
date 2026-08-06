@@ -1,27 +1,32 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>net9.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.18" />
-  </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer"
+						  Version="9.0.18" />
 
-  <ItemGroup>
-    <Folder Include="Middlewares\" />
-    <Folder Include="Endpoints\" />
-    <Folder Include="Extensions\" />
-    <Folder Include="Controllers\" />
-    <Folder Include="Configuration\" />
-  </ItemGroup>
+		<PackageReference Include="Microsoft.AspNetCore.OpenApi"
+						  Version="9.0.18" />
 
-  <ItemGroup>
-    <ProjectReference Include="..\WarehouseManager.Application\WarehouseManager.Application.csproj" />
-    <ProjectReference Include="..\WarehouseManager.Contracts\WarehouseManager.Contracts.csproj" />
-    <ProjectReference Include="..\WarehouseManager.Infrastructure\WarehouseManager.Infrastructure.csproj" />
-  </ItemGroup>
+		<PackageReference Include="Swashbuckle.AspNetCore"
+						  Version="6.6.2" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\WarehouseManager.Application\WarehouseManager.Application.csproj" />
+		<ProjectReference Include="..\WarehouseManager.Contracts\WarehouseManager.Contracts.csproj" />
+		<ProjectReference Include="..\WarehouseManager.Infrastructure\WarehouseManager.Infrastructure.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Update="jwtsettings.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
 
 </Project>

@@ -33,12 +33,6 @@ public sealed class MaterialConfiguration : IEntityTypeConfiguration<Material>
             .HasPrecision(18, 3)
             .IsRequired();
 
-        builder.Property(x => x.Barcode)
-            .HasMaxLength(100);
-
-        builder.HasIndex(x => x.Barcode)
-            .IsUnique();
-
         builder.Property(x => x.CreatedAtUtc)
             .IsRequired();
 

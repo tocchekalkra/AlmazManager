@@ -1,11 +1,7 @@
 ﻿namespace WarehouseManager.Application.Features.Receiving.Commands;
 
-public sealed record ReceiveMaterialCommand
-(
+public sealed record ReceiveMaterialCommand(
     Guid MaterialId,
     decimal Quantity,
     Guid UserId,
-    string Supplier,
-    string DocumentNumber,
-    string? Comment
-);
+    string? Comment);

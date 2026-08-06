@@ -19,7 +19,10 @@ public sealed class WarehouseDbContext : DbContext
 
     public DbSet<Stock> Stocks => Set<Stock>();
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    public DbSet<AppUser> Users => Set<AppUser>();
+
+    protected override void OnModelCreating(
+        ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
