@@ -36,10 +36,6 @@ public sealed class Material : BaseEntity
 
     public string? Barcode { get; private set; }
 
-    public DateTime CreatedAtUtc { get; private set; } = DateTime.UtcNow;
-
-    public bool IsActive { get; private set; } = true;
-
     public void Rename(string name)
     {
         if (string.IsNullOrWhiteSpace(name))

@@ -13,8 +13,6 @@ public sealed class Category : BaseEntity
 
     public string Name { get; private set; } = string.Empty;
 
-    public bool IsActive { get; private set; } = true;
-
     public void Rename(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
