@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WarehouseManager.Application\WarehouseManager.Application.csproj" />
+    <ProjectReference Include="..\WarehouseManager.Domain\WarehouseManager.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Repositories\" />
+    <Folder Include="Identity\" />
+    <Folder Include="Services\" />
+    <Folder Include="Configurations\" />
+    <Folder Include="Persistence\" />
+    <Folder Include="Database\" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="WarehouseManager.API/WarehouseManager.API.csproj" />
+  <Project Path="WarehouseManager.Application/WarehouseManager.Application.csproj" />
+  <Project Path="WarehouseManager.Contracts/WarehouseManager.Contracts.csproj" />
+  <Project Path="WarehouseManager.Domain/WarehouseManager.Domain.csproj" />
+  <Project Path="WarehouseManager.Infrastructure/WarehouseManager.Infrastructure.csproj" />
+</Solution>
