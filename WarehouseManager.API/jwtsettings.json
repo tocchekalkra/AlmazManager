@@ -1,8 +1,0 @@
-{
-  "Jwt": {
-    "Issuer": "WarehouseManager.API",
-    "Audience": "WarehouseManager.Clients",
-    "SecretKey": "WarehouseManager-Development-Key-2026-Change-Before-Production-987654321",
-    "ExpirationHours": 8
-  }
-}

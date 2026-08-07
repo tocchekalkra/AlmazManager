@@ -1,0 +1,14 @@
+﻿<Solution>
+  <Folder Name="/Frontend/">
+    <Project Path="AlmazManager.Web/AlmazManager.Web.esproj">
+      <Build />
+      <Deploy Solution="Release|*" />
+    </Project>
+  </Folder>
+  <Project Path="AlmazManager.API/AlmazManager.API.csproj" />
+  <Project Path="AlmazManager.Application/AlmazManager.Application.csproj" />
+  <Project Path="AlmazManager.Contracts/AlmazManager.Contracts.csproj" />
+  <Project Path="AlmazManager.Domain/AlmazManager.Domain.csproj" />
+  <Project Path="AlmazManager.Infrastructure/AlmazManager.Infrastructure.csproj" />
+</Solution>
+

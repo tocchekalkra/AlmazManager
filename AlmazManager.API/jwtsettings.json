@@ -1,0 +1,8 @@
+﻿{
+  "Jwt": {
+    "Issuer": "AlmazManager.API",
+    "Audience": "AlmazManager.Clients",
+    "SecretKey": "AlmazManager-Development-Key-2026-Change-Before-Production-987654321",
+    "ExpirationHours": 8
+  }
+}
