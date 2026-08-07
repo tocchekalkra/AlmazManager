@@ -7,21 +7,30 @@ namespace WarehouseManager.Application.Features.Categories.Handlers;
 
 public sealed class CreateCategoryHandler
 {
-    private readonly ICategoryRepository _categoryRepository;
+    private readonly ICategoryRepository _repository;
 
     public CreateCategoryHandler(
-        ICategoryRepository categoryRepository)
+        ICategoryRepository repository)
     {
-        _categoryRepository = categoryRepository;
+        _repository = repository;
     }
 
     public async Task<CategoryResponse> HandleAsync(
         CreateCategoryCommand command)
     {
-        var category = new Category(command.Name);
+        if (await _repository.NameExistsAsync(
+                command.Name))
+        {
+            throw new InvalidOperationException(
+                $"Категория '{command.Name}' уже существует.");
+        }
 
-        await _categoryRepository.AddAsync(category);
-        await _categoryRepository.SaveChangesAsync();
+        var category =
+            new Category(command.Name);
+
+        await _repository.AddAsync(category);
+
+        await _repository.SaveChangesAsync();
 
         return new CategoryResponse(
             category.Id,

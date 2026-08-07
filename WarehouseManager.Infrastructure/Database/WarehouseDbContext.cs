@@ -23,9 +23,6 @@ public sealed class WarehouseDbContext : DbContext
     public DbSet<Stock> Stocks =>
         Set<Stock>();
 
-<<<<<<< HEAD
-    public DbSet<AppUser> Users => Set<AppUser>();
-=======
     public DbSet<AppUser> Users =>
         Set<AppUser>();
 
@@ -40,7 +37,6 @@ public sealed class WarehouseDbContext : DbContext
 
     public DbSet<InventoryDocumentItem> InventoryDocumentItems =>
         Set<InventoryDocumentItem>();
->>>>>>> c287b0f (Update 07.08.26 14:30)
 
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)

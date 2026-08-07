@@ -1,41 +1,13 @@
-<<<<<<< HEAD
-﻿using Microsoft.AspNetCore.Mvc;
-using WarehouseManager.Application.Features.Operations.Handlers;
-using WarehouseManager.Contracts.Requests.Operations;
-using WarehouseManager.Contracts.Responses;
-=======
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WarehouseManager.Application.Features.Operations.Handlers;
 using WarehouseManager.Contracts.Requests.Operations;
 using WarehouseManager.Contracts.Responses;
 using WarehouseManager.Contracts.Responses.Operations;
->>>>>>> c287b0f (Update 07.08.26 14:30)
 
 namespace WarehouseManager.API.Controllers;
 
 [ApiController]
-<<<<<<< HEAD
-[Route("api/operations")]
-public sealed class OperationsController : ControllerBase
-{
-    private readonly GetOperationsHandler _getOperationsHandler;
-    private readonly GetOperationCatalogHandler _getCatalogHandler;
-
-    public OperationsController(
-        GetOperationsHandler getOperationsHandler,
-        GetOperationCatalogHandler getCatalogHandler)
-    {
-        _getOperationsHandler = getOperationsHandler;
-        _getCatalogHandler = getCatalogHandler;
-    }
-
-    [HttpGet]
-    public async Task<ActionResult<List<OperationResponse>>> GetAll()
-    {
-        var response =
-            await _getOperationsHandler.HandleAsync();
-=======
 [Authorize]
 [Route("api/operations")]
 public sealed class OperationsController :
@@ -114,21 +86,10 @@ public sealed class OperationsController :
                     "Складская операция не найдена."
             });
         }
->>>>>>> c287b0f (Update 07.08.26 14:30)
 
         return Ok(response);
     }
 
-<<<<<<< HEAD
-    [HttpGet("catalog")]
-    public async Task<ActionResult<OperationCatalogResponse>> GetCatalog(
-        [FromQuery] OperationCatalogRequest request)
-    {
-        var response =
-            await _getCatalogHandler.HandleAsync(request);
-
-        return Ok(response);
-=======
     [HttpGet("material/{materialId:guid}")]
     public async Task<ActionResult<OperationJournalResponse>>
         GetByMaterial(Guid materialId)
@@ -161,6 +122,5 @@ public sealed class OperationsController :
         return Ok(
             await _getJournalHandler.HandleAsync(
                 request));
->>>>>>> c287b0f (Update 07.08.26 14:30)
     }
 }

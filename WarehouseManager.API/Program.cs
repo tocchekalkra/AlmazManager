@@ -8,13 +8,9 @@ using WarehouseManager.API.Middlewares;
 using WarehouseManager.Application.Features.Authentication.Handlers;
 using WarehouseManager.Application.Features.Categories.Handlers;
 using WarehouseManager.Application.Features.Dashboard.Handlers;
-<<<<<<< HEAD
-using WarehouseManager.Application.Features.Inventory.Handlers;
-=======
 using WarehouseManager.Application.Features.Documents.Handlers;
 using WarehouseManager.Application.Features.Inventory.Handlers;
 using WarehouseManager.Application.Features.InventoryDocuments.Handlers;
->>>>>>> c287b0f (Update 07.08.26 14:30)
 using WarehouseManager.Application.Features.Issue.Handlers;
 using WarehouseManager.Application.Features.Materials.Handlers;
 using WarehouseManager.Application.Features.Operations.Handlers;
@@ -30,38 +26,27 @@ using WarehouseManager.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
-<<<<<<< HEAD
-=======
 // ============================================================
 // CONFIGURATION
 // ============================================================
 
->>>>>>> c287b0f (Update 07.08.26 14:30)
 builder.Configuration.AddJsonFile(
     "jwtsettings.json",
     optional: false,
     reloadOnChange: true);
 
-<<<<<<< HEAD
-=======
 // ============================================================
 // JWT SETTINGS
 // ============================================================
 
->>>>>>> c287b0f (Update 07.08.26 14:30)
 var jwtOptions = builder.Configuration
     .GetSection(JwtOptions.SectionName)
     .Get<JwtOptions>()
     ?? throw new InvalidOperationException(
         "Настройки JWT не найдены.");
 
-<<<<<<< HEAD
-if (string.IsNullOrWhiteSpace(jwtOptions.SecretKey)
-    || jwtOptions.SecretKey.Length < 32)
-=======
 if (string.IsNullOrWhiteSpace(jwtOptions.SecretKey) ||
     jwtOptions.SecretKey.Length < 32)
->>>>>>> c287b0f (Update 07.08.26 14:30)
 {
     throw new InvalidOperationException(
         "Секретный ключ JWT должен содержать минимум 32 символа.");
@@ -71,12 +56,6 @@ builder.Services.Configure<JwtOptions>(
     builder.Configuration.GetSection(
         JwtOptions.SectionName));
 
-<<<<<<< HEAD
-builder.Services.AddDbContext<WarehouseDbContext>(options =>
-    options.UseNpgsql(
-        builder.Configuration.GetConnectionString(
-            "DefaultConnection")));
-=======
 // ============================================================
 // DATABASE
 // ============================================================
@@ -90,7 +69,6 @@ builder.Services.AddDbContext<WarehouseDbContext>(
 // ============================================================
 // AUTHENTICATION
 // ============================================================
->>>>>>> c287b0f (Update 07.08.26 14:30)
 
 builder.Services
     .AddAuthentication(options =>
@@ -116,17 +94,6 @@ builder.Services
                 ValidAudience = jwtOptions.Audience,
 
                 ValidateIssuerSigningKey = true,
-<<<<<<< HEAD
-                IssuerSigningKey = new SymmetricSecurityKey(
-                    Encoding.UTF8.GetBytes(
-                        jwtOptions.SecretKey)),
-
-                ValidateLifetime = true,
-                ClockSkew = TimeSpan.FromSeconds(30),
-
-                NameClaimType = ClaimTypes.Name,
-                RoleClaimType = ClaimTypes.Role
-=======
                 IssuerSigningKey =
                     new SymmetricSecurityKey(
                         Encoding.UTF8.GetBytes(
@@ -142,58 +109,11 @@ builder.Services
 
                 RoleClaimType =
                     ClaimTypes.Role
->>>>>>> c287b0f (Update 07.08.26 14:30)
             };
     });
 
 builder.Services.AddAuthorization();
 
-<<<<<<< HEAD
-builder.Services.AddScoped<IMaterialRepository, MaterialRepository>();
-builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
-builder.Services.AddScoped<IStockRepository, StockRepository>();
-builder.Services.AddScoped<IOperationRepository, OperationRepository>();
-builder.Services.AddScoped<IUserRepository, UserRepository>();
-
-builder.Services.AddScoped<IPasswordService, PasswordService>();
-builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
-
-builder.Services.AddScoped<LoginUserHandler>();
-
-builder.Services.AddScoped<CreateMaterialHandler>();
-builder.Services.AddScoped<GetMaterialsHandler>();
-builder.Services.AddScoped<GetMaterialCatalogHandler>();
-builder.Services.AddScoped<GetMaterialByIdHandler>();
-builder.Services.AddScoped<UpdateMaterialHandler>();
-builder.Services.AddScoped<SetMaterialActivityHandler>();
-
-builder.Services.AddScoped<CreateCategoryHandler>();
-builder.Services.AddScoped<GetCategoriesHandler>();
-builder.Services.AddScoped<GetCategoryByIdHandler>();
-builder.Services.AddScoped<UpdateCategoryHandler>();
-builder.Services.AddScoped<SetCategoryActivityHandler>();
-
-builder.Services.AddScoped<GetStocksHandler>();
-builder.Services.AddScoped<GetStockCatalogHandler>();
-
-builder.Services.AddScoped<GetOperationsHandler>();
-builder.Services.AddScoped<GetOperationCatalogHandler>();
-
-builder.Services.AddScoped<ReceiveMaterialHandler>();
-builder.Services.AddScoped<IssueMaterialHandler>();
-
-builder.Services.AddScoped<InventoryAdjustmentHandler>();
-builder.Services.AddScoped<BulkInventoryHandler>();
-
-builder.Services.AddScoped<GetDashboardHandler>();
-
-builder.Services.AddScoped<RegisterUserHandler>();
-builder.Services.AddScoped<GetUsersHandler>();
-
-builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-
-=======
 // ============================================================
 // REPOSITORIES
 // ============================================================
@@ -381,7 +301,6 @@ builder.Services.AddEndpointsApiExplorer();
 // SWAGGER
 // ============================================================
 
->>>>>>> c287b0f (Update 07.08.26 14:30)
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc(
@@ -389,13 +308,9 @@ builder.Services.AddSwaggerGen(options =>
         new OpenApiInfo
         {
             Title = "WarehouseManager API",
-<<<<<<< HEAD
-            Version = "v1"
-=======
             Version = "v1",
             Description =
                 "API системы складского учета WarehouseManager"
->>>>>>> c287b0f (Update 07.08.26 14:30)
         });
 
     options.AddSecurityDefinition(
@@ -403,13 +318,6 @@ builder.Services.AddSwaggerGen(options =>
         new OpenApiSecurityScheme
         {
             Name = "Authorization",
-<<<<<<< HEAD
-            Type = SecuritySchemeType.Http,
-            Scheme = "bearer",
-            BearerFormat = "JWT",
-            In = ParameterLocation.Header,
-            Description = "Вставьте JWT-токен без слова Bearer."
-=======
 
             Type =
                 SecuritySchemeType.Http,
@@ -425,7 +333,6 @@ builder.Services.AddSwaggerGen(options =>
 
             Description =
                 "Вставьте JWT-токен без слова Bearer."
->>>>>>> c287b0f (Update 07.08.26 14:30)
         });
 
     options.AddSecurityRequirement(
@@ -434,14 +341,6 @@ builder.Services.AddSwaggerGen(options =>
             {
                 new OpenApiSecurityScheme
                 {
-<<<<<<< HEAD
-                    Reference = new OpenApiReference
-                    {
-                        Type = ReferenceType.SecurityScheme,
-                        Id = "Bearer"
-                    }
-                },
-=======
                     Reference =
                         new OpenApiReference
                         {
@@ -453,20 +352,10 @@ builder.Services.AddSwaggerGen(options =>
                         }
                 },
 
->>>>>>> c287b0f (Update 07.08.26 14:30)
                 Array.Empty<string>()
             }
         });
 });
-<<<<<<< HEAD
-
-var app = builder.Build();
-
-app.UseMiddleware<ExceptionHandlingMiddleware>();
-
-app.UseSwagger();
-app.UseSwaggerUI();
-=======
 
 // ============================================================
 // APPLICATION
@@ -502,9 +391,7 @@ app.UseSwaggerUI(options =>
 // ============================================================
 
 app.UseAuthentication();
->>>>>>> c287b0f (Update 07.08.26 14:30)
 
-app.UseAuthentication();
 app.UseAuthorization();
 
 // ============================================================
@@ -513,11 +400,8 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-<<<<<<< HEAD
-=======
 // ============================================================
 // RUN
 // ============================================================
 
->>>>>>> c287b0f (Update 07.08.26 14:30)
 app.Run();

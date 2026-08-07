@@ -6,26 +6,20 @@ namespace WarehouseManager.Application.Features.Categories.Handlers;
 
 public sealed class UpdateCategoryHandler
 {
-    private readonly ICategoryRepository _categoryRepository;
+    private readonly ICategoryRepository _repository;
 
     public UpdateCategoryHandler(
-        ICategoryRepository categoryRepository)
+        ICategoryRepository repository)
     {
-        _categoryRepository = categoryRepository;
+        _repository = repository;
     }
 
     public async Task<CategoryResponse> HandleAsync(
         UpdateCategoryCommand command)
     {
-        if (command.CategoryId == Guid.Empty)
-        {
-            throw new ArgumentException(
-                "Категория не указана.",
-                nameof(command.CategoryId));
-        }
-
         var category =
-            await _categoryRepository.GetByIdAsync(command.CategoryId);
+            await _repository.GetByIdAsync(
+                command.CategoryId);
 
         if (category is null)
         {
@@ -33,10 +27,19 @@ public sealed class UpdateCategoryHandler
                 "Категория не найдена.");
         }
 
+        if (await _repository.NameExistsAsync(
+                command.Name,
+                category.Id))
+        {
+            throw new InvalidOperationException(
+                $"Категория '{command.Name}' уже существует.");
+        }
+
         category.Rename(command.Name);
 
-        await _categoryRepository.UpdateAsync(category);
-        await _categoryRepository.SaveChangesAsync();
+        await _repository.UpdateAsync(category);
+
+        await _repository.SaveChangesAsync();
 
         return new CategoryResponse(
             category.Id,

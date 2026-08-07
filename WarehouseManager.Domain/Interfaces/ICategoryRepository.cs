@@ -6,6 +6,12 @@ public interface ICategoryRepository
 {
     Task<Category?> GetByIdAsync(Guid id);
 
+    Task<Category?> GetByNameAsync(string name);
+
+    Task<bool> NameExistsAsync(
+        string name,
+        Guid? excludeCategoryId = null);
+
     Task<List<Category>> GetAllAsync();
 
     Task AddAsync(Category category);

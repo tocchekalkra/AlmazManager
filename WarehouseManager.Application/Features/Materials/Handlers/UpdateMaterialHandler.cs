@@ -21,11 +21,30 @@ public sealed class UpdateMaterialHandler
     public async Task<MaterialResponse> HandleAsync(
         UpdateMaterialCommand command)
     {
-        if (command.MaterialId == Guid.Empty)
+        var material =
+            await _materialRepository.GetByIdAsync(
+                command.MaterialId);
+
+        if (material is null)
         {
-            throw new ArgumentException(
-                "Материал не указан.",
-                nameof(command.MaterialId));
+            throw new InvalidOperationException(
+                "Материал не найден.");
+        }
+
+        var category =
+            await _categoryRepository.GetByIdAsync(
+                command.CategoryId);
+
+        if (category is null)
+        {
+            throw new InvalidOperationException(
+                "Категория не найдена.");
+        }
+
+        if (!category.IsActive)
+        {
+            throw new InvalidOperationException(
+                $"Категория '{category.Name}' находится в архиве.");
         }
 
         if (!Enum.TryParse<MeasurementUnit>(
@@ -34,35 +53,39 @@ public sealed class UpdateMaterialHandler
                 out var unit))
         {
             throw new ArgumentException(
-                "Неизвестная единица измерения.",
-                nameof(command.Unit));
+                "Неизвестная единица измерения.");
         }
 
-        var category =
-            await _categoryRepository.GetByIdAsync(command.CategoryId);
-
-        if (category is null)
+        if (!Enum.IsDefined(unit))
         {
-            throw new InvalidOperationException(
-                "Категория не найдена.");
+            throw new ArgumentException(
+                "Неизвестная единица измерения.");
         }
 
-        var material =
-            await _materialRepository.GetByIdAsync(command.MaterialId);
-
-        if (material is null)
+        if (await _materialRepository.ArticleExistsAsync(
+                command.Article,
+                material.Id))
         {
             throw new InvalidOperationException(
-                "Материал не найден.");
+                $"Другой материал уже использует артикул '{command.Article}'.");
         }
 
         material.Rename(command.Name);
-        material.ChangeArticle(command.Article);
-        material.ChangeCategory(command.CategoryId);
-        material.ChangeUnit(unit);
-        material.ChangeMinimumQuantity(command.MinimumQuantity);
 
-        await _materialRepository.UpdateAsync(material);
+        material.ChangeArticle(
+            command.Article);
+
+        material.ChangeCategory(
+            command.CategoryId);
+
+        material.ChangeUnit(unit);
+
+        material.ChangeMinimumQuantity(
+            command.MinimumQuantity);
+
+        await _materialRepository.UpdateAsync(
+            material);
+
         await _materialRepository.SaveChangesAsync();
 
         return new MaterialResponse(

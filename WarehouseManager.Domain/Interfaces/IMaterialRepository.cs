@@ -6,6 +6,12 @@ public interface IMaterialRepository
 {
     Task<Material?> GetByIdAsync(Guid id);
 
+    Task<Material?> GetByArticleAsync(string article);
+
+    Task<bool> ArticleExistsAsync(
+        string article,
+        Guid? excludeMaterialId = null);
+
     Task<List<Material>> GetAllAsync();
 
     Task AddAsync(Material material);

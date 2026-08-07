@@ -9,11 +9,14 @@ namespace WarehouseManager.Application.Features.Materials.Handlers;
 public sealed class CreateMaterialHandler
 {
     private readonly IMaterialRepository _materialRepository;
+    private readonly ICategoryRepository _categoryRepository;
 
     public CreateMaterialHandler(
-        IMaterialRepository materialRepository)
+        IMaterialRepository materialRepository,
+        ICategoryRepository categoryRepository)
     {
         _materialRepository = materialRepository;
+        _categoryRepository = categoryRepository;
     }
 
     public async Task<MaterialResponse> HandleAsync(
@@ -28,6 +31,35 @@ public sealed class CreateMaterialHandler
                 "Неизвестная единица измерения.");
         }
 
+        if (!Enum.IsDefined(unit))
+        {
+            throw new ArgumentException(
+                "Неизвестная единица измерения.");
+        }
+
+        var category =
+            await _categoryRepository.GetByIdAsync(
+                command.CategoryId);
+
+        if (category is null)
+        {
+            throw new InvalidOperationException(
+                "Категория не найдена.");
+        }
+
+        if (!category.IsActive)
+        {
+            throw new InvalidOperationException(
+                $"Категория '{category.Name}' находится в архиве.");
+        }
+
+        if (await _materialRepository.ArticleExistsAsync(
+                command.Article))
+        {
+            throw new InvalidOperationException(
+                $"Материал с артикулом '{command.Article}' уже существует.");
+        }
+
         var material = new Material(
             command.Name,
             command.Article,
@@ -35,7 +67,9 @@ public sealed class CreateMaterialHandler
             unit,
             command.MinimumQuantity);
 
-        await _materialRepository.AddAsync(material);
+        await _materialRepository.AddAsync(
+            material);
+
         await _materialRepository.SaveChangesAsync();
 
         return new MaterialResponse(

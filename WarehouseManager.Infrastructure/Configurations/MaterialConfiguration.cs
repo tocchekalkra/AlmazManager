@@ -4,9 +4,11 @@ using WarehouseManager.Domain.Entities;
 
 namespace WarehouseManager.Infrastructure.Configurations;
 
-public sealed class MaterialConfiguration : IEntityTypeConfiguration<Material>
+public sealed class MaterialConfiguration :
+    IEntityTypeConfiguration<Material>
 {
-    public void Configure(EntityTypeBuilder<Material> builder)
+    public void Configure(
+        EntityTypeBuilder<Material> builder)
     {
         builder.ToTable("Materials");
 
@@ -14,14 +16,11 @@ public sealed class MaterialConfiguration : IEntityTypeConfiguration<Material>
 
         builder.Property(x => x.Name)
             .IsRequired()
-            .HasMaxLength(200);
+            .HasMaxLength(250);
 
         builder.Property(x => x.Article)
             .IsRequired()
             .HasMaxLength(100);
-
-        builder.HasIndex(x => x.Article)
-            .IsUnique();
 
         builder.Property(x => x.CategoryId)
             .IsRequired();
@@ -33,11 +32,18 @@ public sealed class MaterialConfiguration : IEntityTypeConfiguration<Material>
             .HasPrecision(18, 3)
             .IsRequired();
 
+        builder.Property(x => x.IsActive)
+            .IsRequired();
+
         builder.Property(x => x.CreatedAtUtc)
             .IsRequired();
 
-        builder.Property(x => x.IsActive)
-            .IsRequired();
+        builder.HasIndex(x => x.Article)
+            .IsUnique();
+
+        builder.HasIndex(x => x.Name);
+
+        builder.HasIndex(x => x.CategoryId);
 
         builder.HasOne<Category>()
             .WithMany()
