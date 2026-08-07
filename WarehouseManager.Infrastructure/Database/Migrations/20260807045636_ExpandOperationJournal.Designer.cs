@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using WarehouseManager.Infrastructure.Database;
@@ -11,17 +12,15 @@ using WarehouseManager.Infrastructure.Database;
 namespace WarehouseManager.Infrastructure.Database.Migrations
 {
     [DbContext(typeof(WarehouseDbContext))]
-    partial class WarehouseDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260807045636_ExpandOperationJournal")]
+    partial class ExpandOperationJournal
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
-<<<<<<< HEAD
-                .HasAnnotation("ProductVersion", "9.0.4")
-=======
                 .HasAnnotation("ProductVersion", "9.0.1")
->>>>>>> c287b0f (Update 07.08.26 14:30)
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -89,77 +88,6 @@ namespace WarehouseManager.Infrastructure.Database.Migrations
                     b.ToTable("Categories", (string)null);
                 });
 
-<<<<<<< HEAD
-=======
-            modelBuilder.Entity("WarehouseManager.Domain.Entities.InventoryDocument", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("CancelledAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Comment")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Number")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTime?>("PostedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Number")
-                        .IsUnique();
-
-                    b.ToTable("InventoryDocuments", (string)null);
-                });
-
-            modelBuilder.Entity("WarehouseManager.Domain.Entities.InventoryDocumentItem", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("ActualQuantity")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("numeric(18,3)");
-
-                    b.Property<decimal>("ExpectedQuantity")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("numeric(18,3)");
-
-                    b.Property<Guid>("InventoryDocumentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("MaterialId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("MaterialId");
-
-                    b.HasIndex("InventoryDocumentId", "MaterialId")
-                        .IsUnique();
-
-                    b.ToTable("InventoryDocumentItems", (string)null);
-                });
-
->>>>>>> c287b0f (Update 07.08.26 14:30)
             modelBuilder.Entity("WarehouseManager.Domain.Entities.Material", b =>
                 {
                     b.Property<Guid>("Id")
@@ -209,21 +137,12 @@ namespace WarehouseManager.Infrastructure.Database.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("Comment")
-<<<<<<< HEAD
-                        .HasColumnType("text");
-=======
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
->>>>>>> c287b0f (Update 07.08.26 14:30)
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
-<<<<<<< HEAD
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-=======
                     b.Property<Guid?>("DocumentId")
                         .HasColumnType("uuid");
 
@@ -233,14 +152,10 @@ namespace WarehouseManager.Infrastructure.Database.Migrations
                     b.Property<bool>("IsReversal")
                         .HasColumnType("boolean");
 
->>>>>>> c287b0f (Update 07.08.26 14:30)
                     b.Property<Guid>("MaterialId")
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("Quantity")
-<<<<<<< HEAD
-                        .HasColumnType("numeric");
-=======
                         .HasPrecision(18, 3)
                         .HasColumnType("numeric(18,3)");
 
@@ -258,7 +173,6 @@ namespace WarehouseManager.Infrastructure.Database.Migrations
 
                     b.Property<Guid?>("ReversedOperationId")
                         .HasColumnType("uuid");
->>>>>>> c287b0f (Update 07.08.26 14:30)
 
                     b.Property<int>("Type")
                         .HasColumnType("integer");
@@ -268,9 +182,6 @@ namespace WarehouseManager.Infrastructure.Database.Migrations
 
                     b.HasKey("Id");
 
-<<<<<<< HEAD
-                    b.ToTable("Operations");
-=======
                     b.HasIndex("CreatedAtUtc");
 
                     b.HasIndex("DocumentId");
@@ -280,7 +191,6 @@ namespace WarehouseManager.Infrastructure.Database.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("Operations", (string)null);
->>>>>>> c287b0f (Update 07.08.26 14:30)
                 });
 
             modelBuilder.Entity("WarehouseManager.Domain.Entities.Stock", b =>
@@ -309,8 +219,6 @@ namespace WarehouseManager.Infrastructure.Database.Migrations
                     b.ToTable("Stocks");
                 });
 
-<<<<<<< HEAD
-=======
             modelBuilder.Entity("WarehouseManager.Domain.Entities.WarehouseDocument", b =>
                 {
                     b.Property<Guid>("Id")
@@ -387,22 +295,6 @@ namespace WarehouseManager.Infrastructure.Database.Migrations
                     b.ToTable("WarehouseDocumentItems", (string)null);
                 });
 
-            modelBuilder.Entity("WarehouseManager.Domain.Entities.InventoryDocumentItem", b =>
-                {
-                    b.HasOne("WarehouseManager.Domain.Entities.InventoryDocument", null)
-                        .WithMany("Items")
-                        .HasForeignKey("InventoryDocumentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("WarehouseManager.Domain.Entities.Material", null)
-                        .WithMany()
-                        .HasForeignKey("MaterialId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
->>>>>>> c287b0f (Update 07.08.26 14:30)
             modelBuilder.Entity("WarehouseManager.Domain.Entities.Material", b =>
                 {
                     b.HasOne("WarehouseManager.Domain.Entities.Category", null)
@@ -411,8 +303,6 @@ namespace WarehouseManager.Infrastructure.Database.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
-<<<<<<< HEAD
-=======
 
             modelBuilder.Entity("WarehouseManager.Domain.Entities.WarehouseDocumentItem", b =>
                 {
@@ -429,16 +319,10 @@ namespace WarehouseManager.Infrastructure.Database.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("WarehouseManager.Domain.Entities.InventoryDocument", b =>
-                {
-                    b.Navigation("Items");
-                });
-
             modelBuilder.Entity("WarehouseManager.Domain.Entities.WarehouseDocument", b =>
                 {
                     b.Navigation("Items");
                 });
->>>>>>> c287b0f (Update 07.08.26 14:30)
 #pragma warning restore 612, 618
         }
     }

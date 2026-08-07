@@ -1,0 +1,230 @@
+﻿using WarehouseManager.Domain.Enums;
+
+namespace WarehouseManager.Domain.Entities;
+
+public sealed class WarehouseDocument : BaseEntity
+{
+    private WarehouseDocument()
+    {
+    }
+
+    public WarehouseDocument(
+        string number,
+        WarehouseDocumentType type,
+        Guid userId,
+        string? comment)
+    {
+        if (string.IsNullOrWhiteSpace(number))
+        {
+            throw new ArgumentException(
+                "Номер документа не указан.",
+                nameof(number));
+        }
+
+        if (userId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "Пользователь не указан.",
+                nameof(userId));
+        }
+
+        Number = number.Trim();
+        Type = type;
+        UserId = userId;
+        Status = WarehouseDocumentStatus.Draft;
+
+        ChangeComment(comment);
+    }
+
+    public string Number { get; private set; } = string.Empty;
+
+    public WarehouseDocumentType Type { get; private set; }
+
+    public WarehouseDocumentStatus Status { get; private set; }
+
+    public Guid UserId { get; private set; }
+
+    public string? Comment { get; private set; }
+
+    public DateTime? PostedAtUtc { get; private set; }
+
+    public DateTime? CancelledAtUtc { get; private set; }
+
+    public List<WarehouseDocumentItem> Items { get; private set; } = new();
+
+    public void ChangeComment(string? comment)
+    {
+        EnsureDraft();
+
+        if (!string.IsNullOrWhiteSpace(comment) &&
+            comment.Trim().Length > 1000)
+        {
+            throw new ArgumentException(
+                "Комментарий документа не может быть длиннее 1000 символов.",
+                nameof(comment));
+        }
+
+        Comment = string.IsNullOrWhiteSpace(comment)
+            ? null
+            : comment.Trim();
+    }
+
+    public void AddItem(
+        Guid materialId,
+        decimal quantity)
+    {
+        EnsureDraft();
+
+        if (materialId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "Материал не указан.",
+                nameof(materialId));
+        }
+
+        if (quantity <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(quantity),
+                "Количество должно быть больше нуля.");
+        }
+
+        if (Items.Any(x =>
+                x.MaterialId == materialId))
+        {
+            throw new InvalidOperationException(
+                "Материал уже добавлен в документ.");
+        }
+
+        Items.Add(
+            new WarehouseDocumentItem(
+                Id,
+                materialId,
+                quantity));
+    }
+
+    public void ReplaceItems(
+        IEnumerable<(Guid MaterialId, decimal Quantity)> items)
+    {
+        EnsureDraft();
+
+        var requestedItems = items.ToList();
+
+        if (requestedItems.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "Документ должен содержать хотя бы одну позицию.");
+        }
+
+        var duplicates = requestedItems
+            .GroupBy(x => x.MaterialId)
+            .Any(group => group.Count() > 1);
+
+        if (duplicates)
+        {
+            throw new InvalidOperationException(
+                "Один материал нельзя добавлять в документ несколько раз.");
+        }
+
+        foreach (var item in requestedItems)
+        {
+            if (item.MaterialId == Guid.Empty)
+            {
+                throw new ArgumentException(
+                    "Материал не указан.");
+            }
+
+            if (item.Quantity <= 0)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(item.Quantity),
+                    "Количество должно быть больше нуля.");
+            }
+        }
+
+        var requestedMaterialIds = requestedItems
+            .Select(x => x.MaterialId)
+            .ToHashSet();
+
+        // Удаляем только те позиции,
+        // которых больше нет в новом составе документа.
+        var itemsToRemove = Items
+            .Where(existing =>
+                !requestedMaterialIds.Contains(
+                    existing.MaterialId))
+            .ToList();
+
+        foreach (var itemToRemove in itemsToRemove)
+        {
+            Items.Remove(itemToRemove);
+        }
+
+        // Существующие позиции обновляем,
+        // а действительно новые — добавляем.
+        foreach (var requestedItem in requestedItems)
+        {
+            var existingItem = Items
+                .FirstOrDefault(x =>
+                    x.MaterialId ==
+                    requestedItem.MaterialId);
+
+            if (existingItem is not null)
+            {
+                existingItem.ChangeQuantity(
+                    requestedItem.Quantity);
+
+                continue;
+            }
+
+            Items.Add(
+                new WarehouseDocumentItem(
+                    Id,
+                    requestedItem.MaterialId,
+                    requestedItem.Quantity));
+        }
+    }
+
+    public void Post()
+    {
+        EnsureDraft();
+
+        if (Items.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "Документ не содержит материалов.");
+        }
+
+        Status = WarehouseDocumentStatus.Posted;
+        PostedAtUtc = DateTime.UtcNow;
+    }
+
+    public void Cancel()
+    {
+        if (Status != WarehouseDocumentStatus.Posted)
+        {
+            throw new InvalidOperationException(
+                "Отменить можно только проведённый документ.");
+        }
+
+        Status = WarehouseDocumentStatus.Cancelled;
+        CancelledAtUtc = DateTime.UtcNow;
+    }
+
+    public void EnsureCanDelete()
+    {
+        if (Status != WarehouseDocumentStatus.Draft)
+        {
+            throw new InvalidOperationException(
+                "Удалить можно только черновик документа.");
+        }
+    }
+
+    private void EnsureDraft()
+    {
+        if (Status != WarehouseDocumentStatus.Draft)
+        {
+            throw new InvalidOperationException(
+                "Изменять можно только черновик документа.");
+        }
+    }
+}

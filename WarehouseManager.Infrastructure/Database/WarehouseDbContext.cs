@@ -11,15 +11,36 @@ public sealed class WarehouseDbContext : DbContext
     {
     }
 
-    public DbSet<Category> Categories => Set<Category>();
+    public DbSet<Category> Categories =>
+        Set<Category>();
 
-    public DbSet<Material> Materials => Set<Material>();
+    public DbSet<Material> Materials =>
+        Set<Material>();
 
-    public DbSet<Operation> Operations => Set<Operation>();
+    public DbSet<Operation> Operations =>
+        Set<Operation>();
 
-    public DbSet<Stock> Stocks => Set<Stock>();
+    public DbSet<Stock> Stocks =>
+        Set<Stock>();
 
+<<<<<<< HEAD
     public DbSet<AppUser> Users => Set<AppUser>();
+=======
+    public DbSet<AppUser> Users =>
+        Set<AppUser>();
+
+    public DbSet<WarehouseDocument> WarehouseDocuments =>
+        Set<WarehouseDocument>();
+
+    public DbSet<WarehouseDocumentItem> WarehouseDocumentItems =>
+        Set<WarehouseDocumentItem>();
+
+    public DbSet<InventoryDocument> InventoryDocuments =>
+        Set<InventoryDocument>();
+
+    public DbSet<InventoryDocumentItem> InventoryDocumentItems =>
+        Set<InventoryDocumentItem>();
+>>>>>>> c287b0f (Update 07.08.26 14:30)
 
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)

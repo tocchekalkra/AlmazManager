@@ -7,6 +7,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+<<<<<<< HEAD
 		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer"
 						  Version="9.0.18" />
 
@@ -17,6 +18,20 @@
 						  Version="6.6.2" />
 	</ItemGroup>
 
+=======
+		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.18" />
+
+		<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.18" />
+
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.1">
+		  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		  <PrivateAssets>all</PrivateAssets>
+		</PackageReference>
+
+		<PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+	</ItemGroup>
+
+>>>>>>> c287b0f (Update 07.08.26 14:30)
 	<ItemGroup>
 		<ProjectReference Include="..\WarehouseManager.Application\WarehouseManager.Application.csproj" />
 		<ProjectReference Include="..\WarehouseManager.Contracts\WarehouseManager.Contracts.csproj" />
