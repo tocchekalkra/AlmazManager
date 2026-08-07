@@ -105,7 +105,7 @@ export default function Sidebar() {
 
                 <div className="brand-copy">
                     <div className="brand-title">
-                        Warehouse<span>Manager</span>
+                        Almaz<span>Manager</span>
                     </div>
 
                     <div className="brand-subtitle">
