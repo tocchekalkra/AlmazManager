@@ -1,0 +1,17 @@
+export default function InventoryPage() {
+    return (
+        <div className="page">
+            <div className="page-heading">
+                <div>
+                    <p className="eyebrow">WAREHOUSE</p>
+                    <h1>Инвентарь</h1>
+                    <p>Управление инвентарем склада.</p>
+                </div>
+            </div>
+
+            <section className="panel empty-page">
+                Раздел склада будет подключён следующим блоком.
+            </section>
+        </div>
+    );
+}
