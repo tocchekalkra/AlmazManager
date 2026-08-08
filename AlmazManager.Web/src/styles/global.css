@@ -1108,66 +1108,67 @@ button {
     .page-heading h1 {
         font-size: 23px;
     }
-    /* =========================================================
+}
+
+
+/* =========================================================
    COMMON BUTTONS
    ========================================================= */
 
-    .button {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        min-height: 38px;
-        padding: 0 14px;
-        border-radius: 9px;
-        border: 1px solid transparent;
-        font-size: 12px;
-        font-weight: 700;
-        cursor: pointer;
-        transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.16s ease, opacity 0.16s ease;
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 0 14px;
+    border-radius: 9px;
+    border: 1px solid transparent;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.16s ease, opacity 0.16s ease;
+}
+
+    .button:hover:not(:disabled) {
+        transform: translateY(-1px);
     }
 
-        .button:hover:not(:disabled) {
-            transform: translateY(-1px);
+    .button:active:not(:disabled) {
+        transform: translateY(0);
+    }
+
+    .button:disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
+    }
+
+
+    /* PRIMARY */
+
+    .button.primary {
+        background: #2563eb;
+        border-color: #3474ee;
+        color: #ffffff;
+        box-shadow: 0 5px 18px rgba(37, 99, 235, 0.18);
+    }
+
+        .button.primary:hover:not(:disabled) {
+            background: #2f6ff1;
+            border-color: #4b82f3;
         }
 
-        .button:active:not(:disabled) {
-            transform: translateY(0);
-        }
 
-        .button:disabled {
-            cursor: not-allowed;
-            opacity: 0.5;
-        }
+    /* SECONDARY */
 
+    .button.secondary {
+        background: #151c25;
+        border-color: #2a3542;
+        color: #cbd5e1;
+    }
 
-        /* PRIMARY */
-
-        .button.primary {
-            background: #2563eb;
-            border-color: #3474ee;
+        .button.secondary:hover:not(:disabled) {
+            background: #1b2530;
+            border-color: #3a4858;
             color: #ffffff;
-            box-shadow: 0 5px 18px rgba(37, 99, 235, 0.18);
         }
-
-            .button.primary:hover:not(:disabled) {
-                background: #2f6ff1;
-                border-color: #4b82f3;
-            }
-
-
-        /* SECONDARY */
-
-        .button.secondary {
-            background: #151c25;
-            border-color: #2a3542;
-            color: #cbd5e1;
-        }
-
-            .button.secondary:hover:not(:disabled) {
-                background: #1b2530;
-                border-color: #3a4858;
-                color: #ffffff;
-            }
-
-}

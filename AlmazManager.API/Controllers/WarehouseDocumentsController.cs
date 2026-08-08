@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+
 using AlmazManager.Application.Features.Documents.Commands;
 using AlmazManager.Application.Features.Documents.Handlers;
 using AlmazManager.Contracts.Requests.Documents;
@@ -39,12 +40,23 @@ public sealed class WarehouseDocumentsController :
         PostWarehouseDocumentHandler postHandler,
         CancelWarehouseDocumentHandler cancelHandler)
     {
-        _createHandler = createHandler;
-        _getHandler = getHandler;
-        _updateHandler = updateHandler;
-        _deleteHandler = deleteHandler;
-        _postHandler = postHandler;
-        _cancelHandler = cancelHandler;
+        _createHandler =
+            createHandler;
+
+        _getHandler =
+            getHandler;
+
+        _updateHandler =
+            updateHandler;
+
+        _deleteHandler =
+            deleteHandler;
+
+        _postHandler =
+            postHandler;
+
+        _cancelHandler =
+            cancelHandler;
     }
 
     [HttpPost]
@@ -56,7 +68,8 @@ public sealed class WarehouseDocumentsController :
         var command =
             new CreateWarehouseDocumentCommand(
                 request.Type,
-                request.UserId,
+                request.Supplier,
+                request.ExternalNumber,
                 request.Comment,
                 request.Items
                     .Select(x =>
@@ -66,8 +79,8 @@ public sealed class WarehouseDocumentsController :
                     .ToList());
 
         var response =
-            await _createHandler.HandleAsync(
-                command);
+            await _createHandler
+                .HandleAsync(command);
 
         return Created(
             $"/api/documents/{response.Id}",
@@ -75,36 +88,37 @@ public sealed class WarehouseDocumentsController :
     }
 
     [HttpGet]
-    public async Task<
-        ActionResult<List<WarehouseDocumentResponse>>>
+    public async Task<ActionResult<List<WarehouseDocumentResponse>>>
         GetAll()
     {
         return Ok(
-            await _getHandler.HandleAsync());
+            await _getHandler
+                .HandleAsync());
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<
-        ActionResult<WarehouseDocumentResponse>>
+    public async Task<ActionResult<WarehouseDocumentResponse>>
         GetById(Guid id)
     {
         var response =
-            await _getHandler.HandleByIdAsync(id);
+            await _getHandler
+                .HandleByIdAsync(id);
 
         if (response is null)
         {
-            return NotFound(new
-            {
-                message = "Документ не найден."
-            });
+            return NotFound(
+                new
+                {
+                    message =
+                        "Документ не найден."
+                });
         }
 
         return Ok(response);
     }
 
     [HttpPut("{id:guid}")]
-    public async Task<
-        ActionResult<WarehouseDocumentResponse>>
+    public async Task<ActionResult<WarehouseDocumentResponse>>
         Update(
             Guid id,
             [FromBody]
@@ -122,36 +136,37 @@ public sealed class WarehouseDocumentsController :
                     .ToList());
 
         var response =
-            await _updateHandler.HandleAsync(
-                command);
+            await _updateHandler
+                .HandleAsync(command);
 
         return Ok(response);
     }
 
     [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(
-        Guid id)
+    public async Task<IActionResult>
+        Delete(Guid id)
     {
-        await _deleteHandler.HandleAsync(id);
+        await _deleteHandler
+            .HandleAsync(id);
 
         return NoContent();
     }
 
     [HttpPost("{id:guid}/post")]
-    public async Task<
-        ActionResult<WarehouseDocumentResponse>>
+    public async Task<ActionResult<WarehouseDocumentResponse>>
         Post(Guid id)
     {
         return Ok(
-            await _postHandler.HandleAsync(id));
+            await _postHandler
+                .HandleAsync(id));
     }
 
     [HttpPost("{id:guid}/cancel")]
-    public async Task<
-        ActionResult<WarehouseDocumentResponse>>
+    public async Task<ActionResult<WarehouseDocumentResponse>>
         Cancel(Guid id)
     {
         return Ok(
-            await _cancelHandler.HandleAsync(id));
+            await _cancelHandler
+                .HandleAsync(id));
     }
 }

@@ -1,4 +1,6 @@
-﻿using AlmazManager.Contracts.Requests.Materials;
+﻿using AlmazManager.Application.Interfaces;
+using AlmazManager.Application.Security;
+using AlmazManager.Contracts.Requests.Materials;
 using AlmazManager.Contracts.Responses;
 using AlmazManager.Domain.Interfaces;
 
@@ -6,106 +8,187 @@ namespace AlmazManager.Application.Features.Materials.Handlers;
 
 public sealed class GetMaterialCatalogHandler
 {
-    private readonly IMaterialRepository _materialRepository;
-    private readonly IStockRepository _stockRepository;
+    private readonly IMaterialRepository
+        _materialRepository;
+
+    private readonly IStockRepository
+        _stockRepository;
+
+    private readonly ICategoryAccessService
+        _categoryAccessService;
 
     public GetMaterialCatalogHandler(
         IMaterialRepository materialRepository,
-        IStockRepository stockRepository)
+        IStockRepository stockRepository,
+        ICategoryAccessService categoryAccessService)
     {
-        _materialRepository = materialRepository;
-        _stockRepository = stockRepository;
+        _materialRepository =
+            materialRepository;
+
+        _stockRepository =
+            stockRepository;
+
+        _categoryAccessService =
+            categoryAccessService;
     }
 
-    public async Task<MaterialCatalogResponse> HandleAsync(
-        MaterialCatalogRequest request)
+    public async Task<MaterialCatalogResponse>
+        HandleAsync(
+            MaterialCatalogRequest request)
     {
-        var page = request.Page < 1
-            ? 1
-            : request.Page;
+        var page =
+            request.Page < 1
+                ? 1
+                : request.Page;
 
-        var pageSize = request.PageSize switch
-        {
-            < 1 => 20,
-            > 100 => 100,
-            _ => request.PageSize
-        };
-
-        var materials = await _materialRepository.GetAllAsync();
-        var stocks = await _stockRepository.GetAllAsync();
-
-        var stockByMaterialId = stocks.ToDictionary(
-            stock => stock.MaterialId,
-            stock => stock.Quantity);
-
-        var query = materials
-            .Select(material =>
+        var pageSize =
+            request.PageSize switch
             {
-                var currentQuantity = stockByMaterialId
-                    .GetValueOrDefault(material.Id, 0);
+                < 1 => 20,
+                > 100 => 100,
+                _ => request.PageSize
+            };
 
-                return new MaterialCatalogItemResponse(
-                    material.Id,
-                    material.Name,
-                    material.Article,
-                    material.CategoryId,
-                    material.Unit.ToString(),
-                    material.MinimumQuantity,
-                    currentQuantity,
-                    currentQuantity < material.MinimumQuantity,
-                    material.IsActive);
-            })
-            .AsEnumerable();
+        var materials =
+            await _materialRepository
+                .GetAllAsync();
 
-        if (!string.IsNullOrWhiteSpace(request.Search))
+        var stocks =
+            await _stockRepository
+                .GetAllAsync();
+
+        var allowedCategoryIds =
+            await _categoryAccessService
+                .GetAllowedCategoryIdsAsync(
+                    CategoryPermission.View);
+
+        if (allowedCategoryIds is not null)
         {
-            var search = request.Search.Trim();
+            materials =
+                materials
+                    .Where(material =>
+                        allowedCategoryIds.Contains(
+                            material.CategoryId))
+                    .ToList();
+        }
 
-            query = query.Where(item =>
-                item.Name.Contains(
-                    search,
-                    StringComparison.OrdinalIgnoreCase)
-                ||
-                item.Article.Contains(
-                    search,
-                    StringComparison.OrdinalIgnoreCase));
+        var stockByMaterialId =
+            stocks.ToDictionary(
+                stock => stock.MaterialId,
+                stock => stock.Quantity);
+
+        var query =
+            materials
+                .Select(material =>
+                {
+                    var currentQuantity =
+                        stockByMaterialId
+                            .GetValueOrDefault(
+                                material.Id,
+                                0);
+
+                    return new MaterialCatalogItemResponse(
+                        material.Id,
+                        material.Name,
+                        material.Article,
+                        material.CategoryId,
+                        material.Unit.ToString(),
+                        material.MinimumQuantity,
+                        currentQuantity,
+                        currentQuantity <
+                        material.MinimumQuantity,
+                        material.IsActive,
+
+                        material.Kind.ToString(),
+                        material.WidthMeters,
+                        material.ColorCode,
+                        material.ColorName,
+                        material.ColorHex);
+                })
+                .AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(
+                request.Search))
+        {
+            var search =
+                request.Search.Trim();
+
+            query =
+                query.Where(item =>
+                    item.Name.Contains(
+                        search,
+                        StringComparison.OrdinalIgnoreCase)
+                    ||
+                    item.Article.Contains(
+                        search,
+                        StringComparison.OrdinalIgnoreCase)
+                    ||
+                    (
+                        item.ColorCode?.Contains(
+                            search,
+                            StringComparison.OrdinalIgnoreCase)
+                        ?? false
+                    )
+                    ||
+                    (
+                        item.ColorName?.Contains(
+                            search,
+                            StringComparison.OrdinalIgnoreCase)
+                        ?? false
+                    ));
         }
 
         if (request.CategoryId.HasValue)
         {
-            query = query.Where(item =>
-                item.CategoryId == request.CategoryId.Value);
+            query =
+                query.Where(item =>
+                    item.CategoryId ==
+                    request.CategoryId.Value);
         }
 
         if (request.BelowMinimum.HasValue)
         {
-            query = query.Where(item =>
-                item.BelowMinimum == request.BelowMinimum.Value);
+            query =
+                query.Where(item =>
+                    item.BelowMinimum ==
+                    request.BelowMinimum.Value);
         }
 
         if (request.HasStock.HasValue)
         {
-            query = request.HasStock.Value
-                ? query.Where(item => item.CurrentQuantity > 0)
-                : query.Where(item => item.CurrentQuantity <= 0);
+            query =
+                request.HasStock.Value
+                    ? query.Where(
+                        item =>
+                            item.CurrentQuantity > 0)
+                    : query.Where(
+                        item =>
+                            item.CurrentQuantity <= 0);
         }
 
-        query = ApplySorting(
-            query,
-            request.SortBy,
-            request.SortDirection);
+        query =
+            ApplySorting(
+                query,
+                request.SortBy,
+                request.SortDirection);
 
-        var totalCount = query.Count();
+        var totalCount =
+            query.Count();
 
-        var totalPages = totalCount == 0
-            ? 0
-            : (int)Math.Ceiling(
-                totalCount / (double)pageSize);
+        var totalPages =
+            totalCount == 0
+                ? 0
+                : (int)Math.Ceiling(
+                    totalCount /
+                    (double)pageSize);
 
-        var items = query
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToList();
+        var items =
+            query
+                .Skip(
+                    (page - 1) *
+                    pageSize)
+                .Take(pageSize)
+                .ToList();
 
         return new MaterialCatalogResponse(
             page,
@@ -115,40 +198,85 @@ public sealed class GetMaterialCatalogHandler
             items);
     }
 
-    private static IEnumerable<MaterialCatalogItemResponse> ApplySorting(
-        IEnumerable<MaterialCatalogItemResponse> query,
-        string? sortBy,
-        string? sortDirection)
+    private static
+        IEnumerable<MaterialCatalogItemResponse>
+        ApplySorting(
+            IEnumerable<MaterialCatalogItemResponse>
+                query,
+            string? sortBy,
+            string? sortDirection)
     {
-        var descending = string.Equals(
-            sortDirection,
-            "desc",
-            StringComparison.OrdinalIgnoreCase);
+        var descending =
+            string.Equals(
+                sortDirection,
+                "desc",
+                StringComparison.OrdinalIgnoreCase);
 
         var normalizedSortBy =
-            sortBy?.Trim().ToLowerInvariant();
+            sortBy?
+                .Trim()
+                .ToLowerInvariant();
 
         return normalizedSortBy switch
         {
-            "article" => descending
-                ? query.OrderByDescending(item => item.Article)
-                : query.OrderBy(item => item.Article),
+            "article" =>
+                descending
+                    ? query.OrderByDescending(
+                        item => item.Article)
+                    : query.OrderBy(
+                        item => item.Article),
 
-            "quantity" => descending
-                ? query.OrderByDescending(item => item.CurrentQuantity)
-                : query.OrderBy(item => item.CurrentQuantity),
+            "quantity" =>
+                descending
+                    ? query.OrderByDescending(
+                        item =>
+                            item.CurrentQuantity)
+                    : query.OrderBy(
+                        item =>
+                            item.CurrentQuantity),
 
-            "minimumquantity" => descending
-                ? query.OrderByDescending(item => item.MinimumQuantity)
-                : query.OrderBy(item => item.MinimumQuantity),
+            "minimumquantity" =>
+                descending
+                    ? query.OrderByDescending(
+                        item =>
+                            item.MinimumQuantity)
+                    : query.OrderBy(
+                        item =>
+                            item.MinimumQuantity),
 
-            "category" => descending
-                ? query.OrderByDescending(item => item.CategoryId)
-                : query.OrderBy(item => item.CategoryId),
+            "category" =>
+                descending
+                    ? query.OrderByDescending(
+                        item =>
+                            item.CategoryId)
+                    : query.OrderBy(
+                        item =>
+                            item.CategoryId),
 
-            _ => descending
-                ? query.OrderByDescending(item => item.Name)
-                : query.OrderBy(item => item.Name)
+            "width" =>
+                descending
+                    ? query.OrderByDescending(
+                        item =>
+                            item.WidthMeters)
+                    : query.OrderBy(
+                        item =>
+                            item.WidthMeters),
+
+            "color" =>
+                descending
+                    ? query.OrderByDescending(
+                        item =>
+                            item.ColorCode)
+                    : query.OrderBy(
+                        item =>
+                            item.ColorCode),
+
+            _ =>
+                descending
+                    ? query.OrderByDescending(
+                        item => item.Name)
+                    : query.OrderBy(
+                        item => item.Name)
         };
     }
 }

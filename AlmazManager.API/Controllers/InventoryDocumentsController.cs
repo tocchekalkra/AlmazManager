@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+
 using AlmazManager.Application.Features.InventoryDocuments.Commands;
 using AlmazManager.Application.Features.InventoryDocuments.Handlers;
 using AlmazManager.Contracts.Requests.InventoryDocuments;
@@ -13,12 +14,23 @@ namespace AlmazManager.API.Controllers;
 public sealed class InventoryDocumentsController :
     ControllerBase
 {
-    private readonly CreateInventoryDocumentHandler _createHandler;
-    private readonly GetInventoryDocumentsHandler _getHandler;
-    private readonly UpdateInventoryDocumentHandler _updateHandler;
-    private readonly DeleteInventoryDocumentHandler _deleteHandler;
-    private readonly PostInventoryDocumentHandler _postHandler;
-    private readonly CancelInventoryDocumentHandler _cancelHandler;
+    private readonly CreateInventoryDocumentHandler
+        _createHandler;
+
+    private readonly GetInventoryDocumentsHandler
+        _getHandler;
+
+    private readonly UpdateInventoryDocumentHandler
+        _updateHandler;
+
+    private readonly DeleteInventoryDocumentHandler
+        _deleteHandler;
+
+    private readonly PostInventoryDocumentHandler
+        _postHandler;
+
+    private readonly CancelInventoryDocumentHandler
+        _cancelHandler;
 
     public InventoryDocumentsController(
         CreateInventoryDocumentHandler createHandler,
@@ -28,12 +40,23 @@ public sealed class InventoryDocumentsController :
         PostInventoryDocumentHandler postHandler,
         CancelInventoryDocumentHandler cancelHandler)
     {
-        _createHandler = createHandler;
-        _getHandler = getHandler;
-        _updateHandler = updateHandler;
-        _deleteHandler = deleteHandler;
-        _postHandler = postHandler;
-        _cancelHandler = cancelHandler;
+        _createHandler =
+            createHandler;
+
+        _getHandler =
+            getHandler;
+
+        _updateHandler =
+            updateHandler;
+
+        _deleteHandler =
+            deleteHandler;
+
+        _postHandler =
+            postHandler;
+
+        _cancelHandler =
+            cancelHandler;
     }
 
     [HttpPost]
@@ -44,7 +67,6 @@ public sealed class InventoryDocumentsController :
     {
         var command =
             new CreateInventoryDocumentCommand(
-                request.UserId,
                 request.Comment,
                 request.Items
                     .Select(x =>
@@ -54,8 +76,9 @@ public sealed class InventoryDocumentsController :
                     .ToList());
 
         var response =
-            await _createHandler.HandleAsync(
-                command);
+            await _createHandler
+                .HandleAsync(
+                    command);
 
         return Created(
             $"/api/inventory-documents/{response.Id}",
@@ -63,12 +86,12 @@ public sealed class InventoryDocumentsController :
     }
 
     [HttpGet]
-    public async Task<
-        ActionResult<List<InventoryDocumentResponse>>>
+    public async Task<ActionResult<List<InventoryDocumentResponse>>>
         GetAll()
     {
         return Ok(
-            await _getHandler.HandleAsync());
+            await _getHandler
+                .HandleAsync());
     }
 
     [HttpGet("{id:guid}")]
@@ -76,18 +99,22 @@ public sealed class InventoryDocumentsController :
         GetById(Guid id)
     {
         var response =
-            await _getHandler.HandleByIdAsync(id);
+            await _getHandler
+                .HandleByIdAsync(
+                    id);
 
         if (response is null)
         {
-            return NotFound(new
-            {
-                message =
-                    "Документ инвентаризации не найден."
-            });
+            return NotFound(
+                new
+                {
+                    message =
+                        "Документ инвентаризации не найден."
+                });
         }
 
-        return Ok(response);
+        return Ok(
+            response);
     }
 
     [HttpPut("{id:guid}")]
@@ -109,15 +136,18 @@ public sealed class InventoryDocumentsController :
                     .ToList());
 
         return Ok(
-            await _updateHandler.HandleAsync(
-                command));
+            await _updateHandler
+                .HandleAsync(
+                    command));
     }
 
     [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(
-        Guid id)
+    public async Task<IActionResult>
+        Delete(Guid id)
     {
-        await _deleteHandler.HandleAsync(id);
+        await _deleteHandler
+            .HandleAsync(
+                id);
 
         return NoContent();
     }
@@ -127,7 +157,9 @@ public sealed class InventoryDocumentsController :
         Post(Guid id)
     {
         return Ok(
-            await _postHandler.HandleAsync(id));
+            await _postHandler
+                .HandleAsync(
+                    id));
     }
 
     [HttpPost("{id:guid}/cancel")]
@@ -135,6 +167,8 @@ public sealed class InventoryDocumentsController :
         Cancel(Guid id)
     {
         return Ok(
-            await _cancelHandler.HandleAsync(id));
+            await _cancelHandler
+                .HandleAsync(
+                    id));
     }
 }

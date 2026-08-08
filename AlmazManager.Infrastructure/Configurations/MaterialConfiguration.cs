@@ -1,6 +1,6 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using AlmazManager.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using AlmazManager.Domain.Entities;
 
 namespace AlmazManager.Infrastructure.Configurations;
 
@@ -32,6 +32,25 @@ public sealed class MaterialConfiguration :
             .HasPrecision(18, 3)
             .IsRequired();
 
+        builder.Property(x => x.Kind)
+            .IsRequired();
+
+        builder.Property(x => x.WidthMeters)
+            .HasPrecision(10, 3)
+            .IsRequired(false);
+
+        builder.Property(x => x.ColorCode)
+            .HasMaxLength(20)
+            .IsRequired(false);
+
+        builder.Property(x => x.ColorName)
+            .HasMaxLength(100)
+            .IsRequired(false);
+
+        builder.Property(x => x.ColorHex)
+            .HasMaxLength(7)
+            .IsRequired(false);
+
         builder.Property(x => x.IsActive)
             .IsRequired();
 
@@ -44,6 +63,15 @@ public sealed class MaterialConfiguration :
         builder.HasIndex(x => x.Name);
 
         builder.HasIndex(x => x.CategoryId);
+
+        builder.HasIndex(x => x.Kind);
+
+        builder.HasIndex(x => new
+        {
+            x.Kind,
+            x.ColorCode,
+            x.WidthMeters
+        });
 
         builder.HasOne<Category>()
             .WithMany()

@@ -6,6 +6,8 @@ public sealed record WarehouseDocumentResponse(
     string Type,
     string Status,
     Guid UserId,
+    string? Supplier,
+    string? ExternalNumber,
     string? Comment,
     DateTime CreatedAtUtc,
     DateTime? PostedAtUtc,

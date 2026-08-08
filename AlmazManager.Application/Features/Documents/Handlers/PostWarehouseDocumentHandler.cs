@@ -1,4 +1,6 @@
-﻿using AlmazManager.Contracts.Responses.Documents;
+﻿using AlmazManager.Application.Interfaces;
+using AlmazManager.Application.Security;
+using AlmazManager.Contracts.Responses.Documents;
 using AlmazManager.Domain.Entities;
 using AlmazManager.Domain.Enums;
 using AlmazManager.Domain.Interfaces;
@@ -7,29 +9,59 @@ namespace AlmazManager.Application.Features.Documents.Handlers;
 
 public sealed class PostWarehouseDocumentHandler
 {
-    private readonly IWarehouseDocumentRepository _documentRepository;
-    private readonly IMaterialRepository _materialRepository;
-    private readonly IStockRepository _stockRepository;
-    private readonly IOperationRepository _operationRepository;
+    private readonly IWarehouseDocumentRepository
+        _documentRepository;
+
+    private readonly IMaterialRepository
+        _materialRepository;
+
+    private readonly IStockRepository
+        _stockRepository;
+
+    private readonly IOperationRepository
+        _operationRepository;
+
+    private readonly ICategoryAccessService
+        _categoryAccessService;
+
+    private readonly ICurrentUserService
+        _currentUserService;
 
     public PostWarehouseDocumentHandler(
         IWarehouseDocumentRepository documentRepository,
         IMaterialRepository materialRepository,
         IStockRepository stockRepository,
-        IOperationRepository operationRepository)
+        IOperationRepository operationRepository,
+        ICategoryAccessService categoryAccessService,
+        ICurrentUserService currentUserService)
     {
-        _documentRepository = documentRepository;
-        _materialRepository = materialRepository;
-        _stockRepository = stockRepository;
-        _operationRepository = operationRepository;
+        _documentRepository =
+            documentRepository;
+
+        _materialRepository =
+            materialRepository;
+
+        _stockRepository =
+            stockRepository;
+
+        _operationRepository =
+            operationRepository;
+
+        _categoryAccessService =
+            categoryAccessService;
+
+        _currentUserService =
+            currentUserService;
     }
 
-    public async Task<WarehouseDocumentResponse> HandleAsync(
-        Guid documentId)
+    public async Task<WarehouseDocumentResponse>
+        HandleAsync(
+            Guid documentId)
     {
         var document =
-            await _documentRepository.GetByIdAsync(
-                documentId);
+            await _documentRepository
+                .GetByIdAsync(
+                    documentId);
 
         if (document is null)
         {
@@ -50,13 +82,12 @@ public sealed class PostWarehouseDocumentHandler
                 "Документ не содержит материалов.");
         }
 
-        // Сначала полностью проверяем документ.
-        // Остатки пока не меняем.
         foreach (var item in document.Items)
         {
             var material =
-                await _materialRepository.GetByIdAsync(
-                    item.MaterialId);
+                await _materialRepository
+                    .GetByIdAsync(
+                        item.MaterialId);
 
             if (material is null)
             {
@@ -70,6 +101,17 @@ public sealed class PostWarehouseDocumentHandler
                     $"Материал '{material.Name}' находится в архиве.");
             }
 
+            var permission =
+                document.Type ==
+                WarehouseDocumentType.Receiving
+                    ? CategoryPermission.Receive
+                    : CategoryPermission.Issue;
+
+            await _categoryAccessService
+                .EnsureAccessAsync(
+                    material.CategoryId,
+                    permission);
+
             if (document.Type ==
                 WarehouseDocumentType.Issue)
             {
@@ -79,7 +121,8 @@ public sealed class PostWarehouseDocumentHandler
                             item.MaterialId);
 
                 var availableQuantity =
-                    existingStock?.Quantity ?? 0;
+                    existingStock?.Quantity ??
+                    0;
 
                 if (availableQuantity <
                     item.Quantity)
@@ -92,22 +135,25 @@ public sealed class PostWarehouseDocumentHandler
             }
         }
 
-        // Только после полной проверки
-        // выполняем движения.
         foreach (var item in document.Items)
         {
             var stock =
-                await _stockRepository.GetByMaterialIdAsync(
-                    item.MaterialId);
+                await _stockRepository
+                    .GetByMaterialIdAsync(
+                        item.MaterialId);
 
             if (stock is null)
             {
-                stock = new Stock(item.MaterialId);
+                stock =
+                    new Stock(
+                        item.MaterialId);
 
-                await _stockRepository.AddAsync(stock);
+                await _stockRepository
+                    .AddAsync(stock);
             }
 
-            var quantityBefore = stock.Quantity;
+            var quantityBefore =
+                stock.Quantity;
 
             decimal quantityChange;
 
@@ -116,20 +162,29 @@ public sealed class PostWarehouseDocumentHandler
             if (document.Type ==
                 WarehouseDocumentType.Receiving)
             {
-                quantityChange = item.Quantity;
-                operationType = OperationType.Receiving;
+                quantityChange =
+                    item.Quantity;
 
-                stock.Increase(item.Quantity);
+                operationType =
+                    OperationType.Receiving;
+
+                stock.Increase(
+                    item.Quantity);
             }
             else
             {
-                quantityChange = -item.Quantity;
-                operationType = OperationType.Issue;
+                quantityChange =
+                    -item.Quantity;
 
-                stock.Decrease(item.Quantity);
+                operationType =
+                    OperationType.Issue;
+
+                stock.Decrease(
+                    item.Quantity);
             }
 
-            var quantityAfter = stock.Quantity;
+            var quantityAfter =
+                stock.Quantity;
 
             var operation =
                 new Operation(
@@ -138,21 +193,25 @@ public sealed class PostWarehouseDocumentHandler
                     quantityBefore,
                     quantityChange,
                     quantityAfter,
-                    document.UserId,
+
+                    // Кто реально провёл документ.
+                    _currentUserService.UserId,
+
                     document.Id,
                     false,
                     null,
-                    BuildOperationComment(document));
+                    BuildOperationComment(
+                        document));
 
-            await _operationRepository.AddAsync(
-                operation);
+            await _operationRepository
+                .AddAsync(
+                    operation);
         }
 
         document.Post();
 
-        // Репозитории используют один WarehouseDbContext,
-        // поэтому одного SaveChanges достаточно.
-        await _documentRepository.SaveChangesAsync();
+        await _documentRepository
+            .SaveChangesAsync();
 
         return Map(document);
     }
@@ -166,15 +225,36 @@ public sealed class PostWarehouseDocumentHandler
                 ? "Документ прихода"
                 : "Документ расхода";
 
-        if (string.IsNullOrWhiteSpace(
-                document.Comment))
+        var parts =
+            new List<string>
+            {
+                $"{action} {document.Number}."
+            };
+
+        if (!string.IsNullOrWhiteSpace(
+                document.Supplier))
         {
-            return $"{action} {document.Number}.";
+            parts.Add(
+                $"Поставщик: {document.Supplier}.");
         }
 
-        return
-            $"{action} {document.Number}. " +
-            document.Comment;
+        if (!string.IsNullOrWhiteSpace(
+                document.ExternalNumber))
+        {
+            parts.Add(
+                $"Накладная: {document.ExternalNumber}.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                document.Comment))
+        {
+            parts.Add(
+                document.Comment);
+        }
+
+        return string.Join(
+            " ",
+            parts);
     }
 
     private static WarehouseDocumentResponse Map(
@@ -186,6 +266,8 @@ public sealed class PostWarehouseDocumentHandler
             document.Type.ToString(),
             document.Status.ToString(),
             document.UserId,
+            document.Supplier,
+            document.ExternalNumber,
             document.Comment,
             document.CreatedAtUtc,
             document.PostedAtUtc,

@@ -3,6 +3,7 @@ using System;
 using AlmazManager.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AlmazManager.Infrastructure.Database.Migrations
 {
     [DbContext(typeof(WarehouseDbContext))]
-    partial class WarehouseDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260808100052_AddMaterialKindsAndOracalFields")]
+    partial class AddMaterialKindsAndOracalFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -365,10 +368,6 @@ namespace AlmazManager.Infrastructure.Database.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("ExternalNumber")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
@@ -383,10 +382,6 @@ namespace AlmazManager.Infrastructure.Database.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
-                    b.Property<string>("Supplier")
-                        .HasMaxLength(250)
-                        .HasColumnType("character varying(250)");
-
                     b.Property<int>("Type")
                         .HasColumnType("integer");
 
@@ -397,12 +392,6 @@ namespace AlmazManager.Infrastructure.Database.Migrations
 
                     b.HasIndex("Number")
                         .IsUnique();
-
-                    b.HasIndex("Status");
-
-                    b.HasIndex("Type");
-
-                    b.HasIndex("UserId");
 
                     b.ToTable("WarehouseDocuments", (string)null);
                 });
@@ -475,15 +464,6 @@ namespace AlmazManager.Infrastructure.Database.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("AlmazManager.Domain.Entities.WarehouseDocument", b =>
-                {
-                    b.HasOne("AlmazManager.Domain.Entities.AppUser", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

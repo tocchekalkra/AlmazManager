@@ -1,4 +1,6 @@
 ﻿using AlmazManager.Application.Features.InventoryDocuments.Commands;
+using AlmazManager.Application.Interfaces;
+using AlmazManager.Application.Security;
 using AlmazManager.Contracts.Responses.InventoryDocuments;
 using AlmazManager.Domain.Entities;
 using AlmazManager.Domain.Interfaces;
@@ -7,34 +9,67 @@ namespace AlmazManager.Application.Features.InventoryDocuments.Handlers;
 
 public sealed class CreateInventoryDocumentHandler
 {
-    private readonly IInventoryDocumentRepository _documentRepository;
-    private readonly IMaterialRepository _materialRepository;
-    private readonly IStockRepository _stockRepository;
-    private readonly IUserRepository _userRepository;
+    private readonly IInventoryDocumentRepository
+        _documentRepository;
+
+    private readonly IMaterialRepository
+        _materialRepository;
+
+    private readonly IStockRepository
+        _stockRepository;
+
+    private readonly IUserRepository
+        _userRepository;
+
+    private readonly ICurrentUserService
+        _currentUserService;
+
+    private readonly ICategoryAccessService
+        _categoryAccessService;
 
     public CreateInventoryDocumentHandler(
         IInventoryDocumentRepository documentRepository,
         IMaterialRepository materialRepository,
         IStockRepository stockRepository,
-        IUserRepository userRepository)
+        IUserRepository userRepository,
+        ICurrentUserService currentUserService,
+        ICategoryAccessService categoryAccessService)
     {
-        _documentRepository = documentRepository;
-        _materialRepository = materialRepository;
-        _stockRepository = stockRepository;
-        _userRepository = userRepository;
+        _documentRepository =
+            documentRepository;
+
+        _materialRepository =
+            materialRepository;
+
+        _stockRepository =
+            stockRepository;
+
+        _userRepository =
+            userRepository;
+
+        _currentUserService =
+            currentUserService;
+
+        _categoryAccessService =
+            categoryAccessService;
     }
 
-    public async Task<InventoryDocumentResponse> HandleAsync(
-        CreateInventoryDocumentCommand command)
+    public async Task<InventoryDocumentResponse>
+        HandleAsync(
+            CreateInventoryDocumentCommand command)
     {
+        var currentUserId =
+            _currentUserService.UserId;
+
         var user =
-            await _userRepository.GetByIdAsync(
-                command.UserId);
+            await _userRepository
+                .GetByIdAsync(
+                    currentUserId);
 
         if (user is null)
         {
             throw new InvalidOperationException(
-                "Пользователь не найден.");
+                "Текущий пользователь не найден.");
         }
 
         if (!user.IsActive)
@@ -60,7 +95,7 @@ public sealed class CreateInventoryDocumentHandler
 
         var document =
             new InventoryDocument(
-                command.UserId,
+                currentUserId,
                 GenerateNumber(),
                 command.Comment);
 
@@ -74,8 +109,9 @@ public sealed class CreateInventoryDocumentHandler
             }
 
             var material =
-                await _materialRepository.GetByIdAsync(
-                    item.MaterialId);
+                await _materialRepository
+                    .GetByIdAsync(
+                        item.MaterialId);
 
             if (material is null)
             {
@@ -89,9 +125,15 @@ public sealed class CreateInventoryDocumentHandler
                     $"Материал '{material.Name}' находится в архиве.");
             }
 
+            await _categoryAccessService
+                .EnsureAccessAsync(
+                    material.CategoryId,
+                    CategoryPermission.Inventory);
+
             var stock =
-                await _stockRepository.GetByMaterialIdAsync(
-                    item.MaterialId);
+                await _stockRepository
+                    .GetByMaterialIdAsync(
+                        item.MaterialId);
 
             var expectedQuantity =
                 stock?.Quantity ?? 0;
@@ -102,14 +144,16 @@ public sealed class CreateInventoryDocumentHandler
                 item.ActualQuantity);
         }
 
-        await _documentRepository.AddAsync(
-            document);
+        await _documentRepository
+            .AddAsync(document);
 
-        await _documentRepository.SaveChangesAsync();
+        await _documentRepository
+            .SaveChangesAsync();
 
-        return await InventoryDocumentMapper.MapAsync(
-            document,
-            _materialRepository);
+        return await InventoryDocumentMapper
+            .MapAsync(
+                document,
+                _materialRepository);
     }
 
     private static string GenerateNumber()

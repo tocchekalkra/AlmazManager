@@ -1,4 +1,6 @@
-﻿using AlmazManager.Contracts.Responses.InventoryDocuments;
+﻿using AlmazManager.Application.Interfaces;
+using AlmazManager.Application.Security;
+using AlmazManager.Contracts.Responses.InventoryDocuments;
 using AlmazManager.Domain.Entities;
 using AlmazManager.Domain.Enums;
 using AlmazManager.Domain.Interfaces;
@@ -7,29 +9,59 @@ namespace AlmazManager.Application.Features.InventoryDocuments.Handlers;
 
 public sealed class PostInventoryDocumentHandler
 {
-    private readonly IInventoryDocumentRepository _documentRepository;
-    private readonly IMaterialRepository _materialRepository;
-    private readonly IStockRepository _stockRepository;
-    private readonly IOperationRepository _operationRepository;
+    private readonly IInventoryDocumentRepository
+        _documentRepository;
+
+    private readonly IMaterialRepository
+        _materialRepository;
+
+    private readonly IStockRepository
+        _stockRepository;
+
+    private readonly IOperationRepository
+        _operationRepository;
+
+    private readonly ICategoryAccessService
+        _categoryAccessService;
+
+    private readonly ICurrentUserService
+        _currentUserService;
 
     public PostInventoryDocumentHandler(
         IInventoryDocumentRepository documentRepository,
         IMaterialRepository materialRepository,
         IStockRepository stockRepository,
-        IOperationRepository operationRepository)
+        IOperationRepository operationRepository,
+        ICategoryAccessService categoryAccessService,
+        ICurrentUserService currentUserService)
     {
-        _documentRepository = documentRepository;
-        _materialRepository = materialRepository;
-        _stockRepository = stockRepository;
-        _operationRepository = operationRepository;
+        _documentRepository =
+            documentRepository;
+
+        _materialRepository =
+            materialRepository;
+
+        _stockRepository =
+            stockRepository;
+
+        _operationRepository =
+            operationRepository;
+
+        _categoryAccessService =
+            categoryAccessService;
+
+        _currentUserService =
+            currentUserService;
     }
 
-    public async Task<InventoryDocumentResponse> HandleAsync(
-        Guid documentId)
+    public async Task<InventoryDocumentResponse>
+        HandleAsync(
+            Guid documentId)
     {
         var document =
-            await _documentRepository.GetByIdAsync(
-                documentId);
+            await _documentRepository
+                .GetByIdAsync(
+                    documentId);
 
         if (document is null)
         {
@@ -44,12 +76,22 @@ public sealed class PostInventoryDocumentHandler
                 "Провести можно только черновик инвентаризации.");
         }
 
-        // Сначала проверяем ВСЕ позиции.
+        if (document.Items.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "Документ инвентаризации не содержит материалов.");
+        }
+
+        /*
+         * Сначала проверяем весь документ.
+         * До окончания проверки склад не меняем.
+         */
         foreach (var item in document.Items)
         {
             var material =
-                await _materialRepository.GetByIdAsync(
-                    item.MaterialId);
+                await _materialRepository
+                    .GetByIdAsync(
+                        item.MaterialId);
 
             if (material is null)
             {
@@ -57,43 +99,75 @@ public sealed class PostInventoryDocumentHandler
                     "Материал не найден.");
             }
 
+            if (!material.IsActive)
+            {
+                throw new InvalidOperationException(
+                    $"Материал '{material.Name}' находится в архиве.");
+            }
+
+            await _categoryAccessService
+                .EnsureAccessAsync(
+                    material.CategoryId,
+                    CategoryPermission.Inventory);
+
             var stock =
-                await _stockRepository.GetByMaterialIdAsync(
-                    item.MaterialId);
+                await _stockRepository
+                    .GetByMaterialIdAsync(
+                        item.MaterialId);
 
             var currentQuantity =
                 stock?.Quantity ?? 0;
 
-            // Защита от изменения склада после начала подсчёта.
-            if (currentQuantity != item.ExpectedQuantity)
+            /*
+             * Если после начала инвентаризации
+             * кто-то сделал приход/расход,
+             * запрещаем проведение старых цифр.
+             */
+            if (currentQuantity !=
+                item.ExpectedQuantity)
             {
                 throw new InvalidOperationException(
                     $"Остаток материала '{material.Name}' изменился " +
                     $"после создания инвентаризации. " +
                     $"Было при создании: {item.ExpectedQuantity}; " +
                     $"сейчас: {currentQuantity}. " +
-                    "Обновите документ инвентаризации.");
+                    "Создайте инвентаризацию заново.");
             }
         }
 
-        // После полной проверки применяем результаты.
+        /*
+         * После полной проверки
+         * применяем фактические остатки.
+         */
         foreach (var item in document.Items)
         {
             var stock =
-                await _stockRepository.GetByMaterialIdAsync(
-                    item.MaterialId);
+                await _stockRepository
+                    .GetByMaterialIdAsync(
+                        item.MaterialId);
 
             if (stock is null)
             {
-                stock = new Stock(item.MaterialId);
+                stock =
+                    new Stock(
+                        item.MaterialId);
 
-                await _stockRepository.AddAsync(
-                    stock);
+                await _stockRepository
+                    .AddAsync(
+                        stock);
             }
 
-            var before = stock.Quantity;
-            var change = item.ActualQuantity - before;
+            var before =
+                stock.Quantity;
 
+            var change =
+                item.ActualQuantity -
+                before;
+
+            /*
+             * Если расхождения нет,
+             * склад менять не нужно.
+             */
             if (change == 0)
             {
                 continue;
@@ -109,24 +183,34 @@ public sealed class PostInventoryDocumentHandler
                     before,
                     change,
                     stock.Quantity,
-                    document.UserId,
+
+                    /*
+                     * Кто реально провёл
+                     * инвентаризацию.
+                     */
+                    _currentUserService.UserId,
+
                     document.Id,
                     false,
                     null,
                     $"Инвентаризация {document.Number}. " +
-                    $"Учёт: {before}; факт: {item.ActualQuantity}; " +
+                    $"Учёт: {before}; " +
+                    $"факт: {item.ActualQuantity}; " +
                     $"разница: {change}.");
 
-            await _operationRepository.AddAsync(
-                operation);
+            await _operationRepository
+                .AddAsync(
+                    operation);
         }
 
         document.Post();
 
-        await _documentRepository.SaveChangesAsync();
+        await _documentRepository
+            .SaveChangesAsync();
 
-        return await InventoryDocumentMapper.MapAsync(
-            document,
-            _materialRepository);
+        return await InventoryDocumentMapper
+            .MapAsync(
+                document,
+                _materialRepository);
     }
 }

@@ -1,7 +1,6 @@
 ﻿namespace AlmazManager.Application.Features.InventoryDocuments.Commands;
 
 public sealed record CreateInventoryDocumentCommand(
-    Guid UserId,
     string? Comment,
     List<CreateInventoryDocumentItemCommand> Items);
 

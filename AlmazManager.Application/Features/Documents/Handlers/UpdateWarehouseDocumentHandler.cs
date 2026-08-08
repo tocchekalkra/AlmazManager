@@ -8,19 +8,26 @@ namespace AlmazManager.Application.Features.Documents.Handlers;
 
 public sealed class UpdateWarehouseDocumentHandler
 {
-    private readonly IWarehouseDocumentRepository _documentRepository;
-    private readonly IMaterialRepository _materialRepository;
+    private readonly IWarehouseDocumentRepository
+        _documentRepository;
+
+    private readonly IMaterialRepository
+        _materialRepository;
 
     public UpdateWarehouseDocumentHandler(
         IWarehouseDocumentRepository documentRepository,
         IMaterialRepository materialRepository)
     {
-        _documentRepository = documentRepository;
-        _materialRepository = materialRepository;
+        _documentRepository =
+            documentRepository;
+
+        _materialRepository =
+            materialRepository;
     }
 
-    public async Task<WarehouseDocumentResponse> HandleAsync(
-        UpdateWarehouseDocumentCommand command)
+    public async Task<WarehouseDocumentResponse>
+        HandleAsync(
+            UpdateWarehouseDocumentCommand command)
     {
         if (command.DocumentId == Guid.Empty)
         {
@@ -30,8 +37,9 @@ public sealed class UpdateWarehouseDocumentHandler
         }
 
         var document =
-            await _documentRepository.GetByIdAsync(
-                command.DocumentId);
+            await _documentRepository
+                .GetByIdAsync(
+                    command.DocumentId);
 
         if (document is null)
         {
@@ -53,9 +61,10 @@ public sealed class UpdateWarehouseDocumentHandler
                 "Документ должен содержать хотя бы одну позицию.");
         }
 
-        var duplicates = command.Items
-            .GroupBy(x => x.MaterialId)
-            .Any(group => group.Count() > 1);
+        var duplicates =
+            command.Items
+                .GroupBy(x => x.MaterialId)
+                .Any(group => group.Count() > 1);
 
         if (duplicates)
         {
@@ -79,8 +88,9 @@ public sealed class UpdateWarehouseDocumentHandler
             }
 
             var material =
-                await _materialRepository.GetByIdAsync(
-                    item.MaterialId);
+                await _materialRepository
+                    .GetByIdAsync(
+                        item.MaterialId);
 
             if (material is null)
             {
@@ -105,7 +115,8 @@ public sealed class UpdateWarehouseDocumentHandler
                     x.Quantity
                 )));
 
-        await _documentRepository.SaveChangesAsync();
+        await _documentRepository
+            .SaveChangesAsync();
 
         return Map(document);
     }
@@ -119,6 +130,8 @@ public sealed class UpdateWarehouseDocumentHandler
             document.Type.ToString(),
             document.Status.ToString(),
             document.UserId,
+            document.Supplier,
+            document.ExternalNumber,
             document.Comment,
             document.CreatedAtUtc,
             document.PostedAtUtc,

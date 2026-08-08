@@ -9,6 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
 using AlmazManager.API.Middlewares;
+using AlmazManager.API.Services;
 
 using AlmazManager.Application.Features.Authentication.Handlers;
 using AlmazManager.Application.Features.Categories.Handlers;
@@ -25,6 +26,7 @@ using AlmazManager.Application.Features.Users.Handlers;
 
 using AlmazManager.Application.Interfaces;
 using AlmazManager.Application.Options;
+using AlmazManager.Application.Services;
 
 using AlmazManager.Domain.Interfaces;
 
@@ -58,13 +60,13 @@ var jwtOptions = builder.Configuration
     .GetSection(JwtOptions.SectionName)
     .Get<JwtOptions>()
     ?? throw new InvalidOperationException(
-        "РќР°СЃС‚СЂРѕР№РєРё JWT РЅРµ РЅР°Р№РґРµРЅС‹.");
+        "Настройки JWT не найдены.");
 
 if (string.IsNullOrWhiteSpace(jwtOptions.SecretKey) ||
     jwtOptions.SecretKey.Length < 32)
 {
     throw new InvalidOperationException(
-        "РЎРµРєСЂРµС‚РЅС‹Р№ РєР»СЋС‡ JWT РґРѕР»Р¶РµРЅ СЃРѕРґРµСЂР¶Р°С‚СЊ РјРёРЅРёРјСѓРј 32 СЃРёРјРІРѕР»Р°.");
+        "Секретный ключ JWT должен содержать минимум 32 символа.");
 }
 
 builder.Services.Configure<JwtOptions>(
@@ -85,10 +87,6 @@ builder.Services.AddDbContext<WarehouseDbContext>(
 
 // ============================================================
 // CORS
-// ============================================================
-// Р Р°Р·СЂРµС€Р°РµРј Р»РѕРєР°Р»СЊРЅРѕРјСѓ React/Vite РѕР±СЂР°С‰Р°С‚СЊСЃСЏ Рє API.
-// РџРѕР·Р¶Рµ, РєРѕРіРґР° РїСЂРёР»РѕР¶РµРЅРёРµ Р±СѓРґРµС‚ СЂР°Р·РјРµС‰РµРЅРѕ РЅР° СЃРµСЂРІРµСЂРµ,
-// Р·Р°РјРµРЅРёРј localhost РЅР° СЂРµР°Р»СЊРЅС‹Р№ Р°РґСЂРµСЃ frontend.
 // ============================================================
 
 builder.Services.AddCors(options =>
@@ -156,6 +154,8 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
+builder.Services.AddHttpContextAccessor();
+
 
 // ============================================================
 // REPOSITORIES
@@ -205,6 +205,14 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     IJwtTokenService,
     JwtTokenService>();
+
+builder.Services.AddScoped<
+    ICurrentUserService,
+    CurrentUserService>();
+
+builder.Services.AddScoped<
+    ICategoryAccessService,
+    CategoryAccessService>();
 
 
 // ============================================================
@@ -270,9 +278,6 @@ builder.Services.AddScoped<GetOperationJournalHandler>();
 
 // ============================================================
 // RECEIVING / ISSUE
-// ============================================================
-// РЎС‚Р°СЂС‹Р№ API РїРѕРєР° РѕСЃС‚Р°РІР»СЏРµРј РґР»СЏ СЃРѕРІРјРµСЃС‚РёРјРѕСЃС‚Рё.
-// РџРѕР·Р¶Рµ РѕРїРµСЂР°С†РёРё РѕРєРѕРЅС‡Р°С‚РµР»СЊРЅРѕ Р±СѓРґСѓС‚ РёРґС‚Рё С‡РµСЂРµР· РґРѕРєСѓРјРµРЅС‚С‹.
 // ============================================================
 
 builder.Services.AddScoped<ReceiveMaterialHandler>();
@@ -362,7 +367,7 @@ builder.Services.AddSwaggerGen(options =>
             Title = "AlmazManager API",
             Version = "v1",
             Description =
-                "API СЃРёСЃС‚РµРјС‹ СЃРєР»Р°РґСЃРєРѕРіРѕ СѓС‡РµС‚Р° AlmazManager"
+                "API системы складского учета AlmazManager"
         });
 
     options.AddSecurityDefinition(
@@ -384,7 +389,7 @@ builder.Services.AddSwaggerGen(options =>
                 ParameterLocation.Header,
 
             Description =
-                "Р’СЃС‚Р°РІСЊС‚Рµ JWT-С‚РѕРєРµРЅ Р±РµР· СЃР»РѕРІР° Bearer."
+                "Вставьте JWT-токен без слова Bearer."
         });
 
     options.AddSecurityRequirement(
@@ -419,17 +424,6 @@ var app = builder.Build();
 
 // ============================================================
 // AUTO START REACT / VITE
-// ============================================================
-// Р Р°Р±РѕС‚Р°РµС‚ С‚РѕР»СЊРєРѕ РІ Development.
-//
-// API:
-//     AlmazManager.API
-//
-// Web:
-//     ../AlmazManager.Web
-//
-// РџРѕСЌС‚РѕРјСѓ РєРѕРґ СЂР°Р±РѕС‚Р°РµС‚ РЅРµР·Р°РІРёСЃРёРјРѕ РѕС‚ С‚РѕРіРѕ,
-// РЅР°С…РѕРґРёС‚СЃСЏ РїСЂРѕРµРєС‚ РЅР° РґРёСЃРєРµ C:, D: РёР»Рё E:.
 // ============================================================
 
 if (app.Environment.IsDevelopment())
@@ -467,8 +461,6 @@ app.UseSwaggerUI(options =>
 // ============================================================
 // CORS
 // ============================================================
-// CORS РґРѕР»Р¶РµРЅ РЅР°С…РѕРґРёС‚СЊСЃСЏ РґРѕ Authentication / Authorization.
-// ============================================================
 
 app.UseCors("AlmazManagerWeb");
 
@@ -505,13 +497,14 @@ static async Task StartWebFrontendAsync(
 {
     const int vitePort = 5173;
 
-    // Р•СЃР»Рё Vite СѓР¶Рµ СЂР°Р±РѕС‚Р°РµС‚ вЂ” РІС‚РѕСЂРѕР№ СЌРєР·РµРјРїР»СЏСЂ РЅРµ Р·Р°РїСѓСЃРєР°РµРј.
+    // Если Vite уже работает —
+    // второй экземпляр не запускаем.
     if (await IsPortOpenAsync(
             "127.0.0.1",
             vitePort))
     {
         Console.WriteLine(
-            $"AlmazManager.Web СѓР¶Рµ СЂР°Р±РѕС‚Р°РµС‚ РЅР° http://localhost:{vitePort}");
+            $"AlmazManager.Web уже работает на http://localhost:{vitePort}");
 
         return;
     }
@@ -535,7 +528,7 @@ static async Task StartWebFrontendAsync(
     if (!Directory.Exists(webPath))
     {
         Console.WriteLine(
-            $"AlmazManager.Web РЅРµ РЅР°Р№РґРµРЅ: {webPath}");
+            $"AlmazManager.Web не найден: {webPath}");
 
         return;
     }
@@ -543,7 +536,7 @@ static async Task StartWebFrontendAsync(
     if (!File.Exists(packageJsonPath))
     {
         Console.WriteLine(
-            $"package.json РЅРµ РЅР°Р№РґРµРЅ: {packageJsonPath}");
+            $"package.json не найден: {packageJsonPath}");
 
         return;
     }
@@ -575,10 +568,10 @@ static async Task StartWebFrontendAsync(
             "============================================");
 
         Console.WriteLine(
-            "AlmazManager.Web Р·Р°РїСѓСЃРєР°РµС‚СЃСЏ...");
+            "AlmazManager.Web запускается...");
 
         Console.WriteLine(
-            $"РџСѓС‚СЊ: {webPath}");
+            $"Путь: {webPath}");
 
         Console.WriteLine(
             $"Web: http://localhost:{vitePort}");
@@ -589,7 +582,7 @@ static async Task StartWebFrontendAsync(
     catch (Exception ex)
     {
         Console.WriteLine(
-            "РќРµ СѓРґР°Р»РѕСЃСЊ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё Р·Р°РїСѓСЃС‚РёС‚СЊ AlmazManager.Web.");
+            "Не удалось автоматически запустить AlmazManager.Web.");
 
         Console.WriteLine(
             ex.Message);

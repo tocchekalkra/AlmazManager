@@ -1,12 +1,17 @@
 import {
     useEffect,
     useMemo,
+    useRef,
     useState,
     type CSSProperties,
     type FormEvent,
 } from 'react';
 
 import {
+    Check,
+    ChevronDown,
+    Eye,
+    EyeOff,
     KeyRound,
     Plus,
     RefreshCcw,
@@ -45,6 +50,35 @@ type CreateUserForm = {
     role: string;
 };
 
+type RoleOption = {
+    value: string;
+    label: string;
+    description: string;
+};
+
+const roleOptions: RoleOption[] = [
+    {
+        value: 'Administrator',
+        label: 'Администратор',
+        description: 'Полный доступ ко всей системе',
+    },
+    {
+        value: 'Printer',
+        label: 'Печатник',
+        description: 'Работа со складом по назначенным категориям',
+    },
+    {
+        value: 'PlotterOperator',
+        label: 'Плоттерщик',
+        description: 'Работа с назначенными категориями и Oracal',
+    },
+    {
+        value: 'Viewer',
+        label: 'Наблюдатель',
+        description: 'Только просмотр разрешённых данных',
+    },
+];
+
 const emptyCreateForm: CreateUserForm = {
     fullName: '',
     login: '',
@@ -53,12 +87,20 @@ const emptyCreateForm: CreateUserForm = {
 };
 
 export default function UsersPage() {
-    const [users, setUsers] = useState<UserItem[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [users, setUsers] =
+        useState<UserItem[]>([]);
 
-    const [search, setSearch] = useState('');
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
+    const [loading, setLoading] =
+        useState(true);
+
+    const [search, setSearch] =
+        useState('');
+
+    const [error, setError] =
+        useState('');
+
+    const [success, setSuccess] =
+        useState('');
 
     const [showCreateModal, setShowCreateModal] =
         useState(false);
@@ -66,7 +108,14 @@ export default function UsersPage() {
     const [createForm, setCreateForm] =
         useState<CreateUserForm>(emptyCreateForm);
 
-    const [creating, setCreating] = useState(false);
+    const [creating, setCreating] =
+        useState(false);
+
+    const [showPassword, setShowPassword] =
+        useState(false);
+
+    const [roleDropdownOpen, setRoleDropdownOpen] =
+        useState(false);
 
     const [selectedUser, setSelectedUser] =
         useState<UserItem | null>(null);
@@ -110,9 +159,8 @@ export default function UsersPage() {
     }
 
     const filteredUsers = useMemo(() => {
-        const query = search
-            .trim()
-            .toLowerCase();
+        const query =
+            search.trim().toLowerCase();
 
         if (!query) {
             return users;
@@ -123,9 +171,11 @@ export default function UsersPage() {
                 user.fullName
                     .toLowerCase()
                     .includes(query) ||
+
                 user.login
                     .toLowerCase()
                     .includes(query) ||
+
                 getRoleLabel(user.role)
                     .toLowerCase()
                     .includes(query),
@@ -190,8 +240,7 @@ export default function UsersPage() {
                 },
             );
 
-            setShowCreateModal(false);
-            setCreateForm(emptyCreateForm);
+            closeCreateModal();
 
             setSuccess(
                 'Пользователь успешно создан.',
@@ -214,11 +263,32 @@ export default function UsersPage() {
         }
     }
 
+    function openCreateModal() {
+        setError('');
+        setSuccess('');
+
+        setCreateForm(emptyCreateForm);
+
+        setShowPassword(false);
+        setRoleDropdownOpen(false);
+        setShowCreateModal(true);
+    }
+
+    function closeCreateModal() {
+        setShowCreateModal(false);
+
+        setCreateForm(emptyCreateForm);
+
+        setShowPassword(false);
+        setRoleDropdownOpen(false);
+    }
+
     async function openAccessModal(
         user: UserItem,
     ) {
         setSelectedUser(user);
         setAccesses([]);
+
         setError('');
         setSuccess('');
 
@@ -275,10 +345,18 @@ export default function UsersPage() {
                         ) {
                             return {
                                 ...access,
-                                canView: false,
-                                canReceive: false,
-                                canIssue: false,
-                                canInventory: false,
+
+                                canView:
+                                    false,
+
+                                canReceive:
+                                    false,
+
+                                canIssue:
+                                    false,
+
+                                canInventory:
+                                    false,
                             };
                         }
 
@@ -288,8 +366,12 @@ export default function UsersPage() {
                         ) {
                             return {
                                 ...access,
-                                [field]: true,
-                                canView: true,
+
+                                [field]:
+                                    true,
+
+                                canView:
+                                    true,
                             };
                         }
 
@@ -314,10 +396,18 @@ export default function UsersPage() {
                             categoryId
                             ? {
                                 ...access,
-                                canView: value,
-                                canReceive: value,
-                                canIssue: value,
-                                canInventory: value,
+
+                                canView:
+                                    value,
+
+                                canReceive:
+                                    value,
+
+                                canIssue:
+                                    value,
+
+                                canInventory:
+                                    value,
                             }
                             : access,
                 ),
@@ -330,10 +420,18 @@ export default function UsersPage() {
                 current.map(
                     (access) => ({
                         ...access,
-                        canView: true,
-                        canReceive: true,
-                        canIssue: true,
-                        canInventory: true,
+
+                        canView:
+                            true,
+
+                        canReceive:
+                            true,
+
+                        canIssue:
+                            true,
+
+                        canInventory:
+                            true,
                     }),
                 ),
         );
@@ -345,10 +443,18 @@ export default function UsersPage() {
                 current.map(
                     (access) => ({
                         ...access,
-                        canView: false,
-                        canReceive: false,
-                        canIssue: false,
-                        canInventory: false,
+
+                        canView:
+                            false,
+
+                        canReceive:
+                            false,
+
+                        canIssue:
+                            false,
+
+                        canInventory:
+                            false,
                     }),
                 ),
         );
@@ -436,13 +542,7 @@ export default function UsersPage() {
                     </p>
                 </div>
 
-                <div
-                    style={{
-                        display: 'flex',
-                        gap: 10,
-                        flexWrap: 'wrap',
-                    }}
-                >
+                <div style={headingActionsStyle}>
                     <button
                         type="button"
                         className="button secondary"
@@ -459,16 +559,7 @@ export default function UsersPage() {
                     <button
                         type="button"
                         className="button primary"
-                        onClick={() => {
-                            setError('');
-                            setSuccess('');
-                            setCreateForm(
-                                emptyCreateForm,
-                            );
-                            setShowCreateModal(
-                                true,
-                            );
-                        }}
+                        onClick={openCreateModal}
                     >
                         <Plus size={17} />
 
@@ -481,10 +572,15 @@ export default function UsersPage() {
                 <div
                     style={{
                         ...messageStyle,
+
                         borderColor:
                             'rgba(248,113,113,.35)',
+
                         background:
                             'rgba(127,29,29,.18)',
+
+                        color:
+                            '#fca5a5',
                     }}
                 >
                     {error}
@@ -495,10 +591,15 @@ export default function UsersPage() {
                 <div
                     style={{
                         ...messageStyle,
+
                         borderColor:
                             'rgba(74,222,128,.3)',
+
                         background:
                             'rgba(20,83,45,.18)',
+
+                        color:
+                            '#86efac',
                     }}
                 >
                     {success}
@@ -507,7 +608,9 @@ export default function UsersPage() {
 
             <div style={statsGrid}>
                 <StatCard
-                    icon={<Users size={20} />}
+                    icon={
+                        <Users size={20} />
+                    }
                     label="Всего пользователей"
                     value={users.length}
                 />
@@ -544,18 +647,7 @@ export default function UsersPage() {
             </div>
 
             <section className="panel">
-                <div
-                    style={{
-                        display: 'flex',
-                        justifyContent:
-                            'space-between',
-                        alignItems:
-                            'center',
-                        gap: 16,
-                        flexWrap: 'wrap',
-                        marginBottom: 18,
-                    }}
-                >
+                <div style={panelToolbarStyle}>
                     <div>
                         <h2
                             style={{
@@ -569,8 +661,12 @@ export default function UsersPage() {
                             style={{
                                 margin:
                                     '6px 0 0',
+
                                 color:
-                                    'var(--text-muted)',
+                                    '#7e8a98',
+
+                                fontSize:
+                                    12,
                             }}
                         >
                             Администратор может
@@ -579,23 +675,24 @@ export default function UsersPage() {
                         </p>
                     </div>
 
-                    <div
-                        style={{
-                            position:
-                                'relative',
-                            minWidth: 280,
-                        }}
-                    >
+                    <div style={searchWrapperStyle}>
                         <Search
                             size={17}
                             style={{
                                 position:
                                     'absolute',
-                                left: 13,
-                                top: '50%',
+
+                                left:
+                                    13,
+
+                                top:
+                                    '50%',
+
                                 transform:
                                     'translateY(-50%)',
-                                opacity: 0.55,
+
+                                opacity:
+                                    0.55,
                             }}
                         />
 
@@ -603,13 +700,13 @@ export default function UsersPage() {
                             value={search}
                             onChange={(event) =>
                                 setSearch(
-                                    event.target
-                                        .value,
+                                    event.target.value,
                                 )
                             }
                             placeholder="Поиск по имени, логину или роли"
                             style={{
                                 ...inputStyle,
+
                                 paddingLeft:
                                     40,
                             }}
@@ -618,20 +715,11 @@ export default function UsersPage() {
                 </div>
 
                 {loading ? (
-                    <div
-                        style={
-                            emptyStateStyle
-                        }
-                    >
+                    <div style={emptyStateStyle}>
                         Загрузка пользователей...
                     </div>
-                ) : filteredUsers.length ===
-                    0 ? (
-                    <div
-                        style={
-                            emptyStateStyle
-                        }
-                    >
+                ) : filteredUsers.length === 0 ? (
+                    <div style={emptyStateStyle}>
                         Пользователи не найдены.
                     </div>
                 ) : (
@@ -641,56 +729,33 @@ export default function UsersPage() {
                                 'auto',
                         }}
                     >
-                        <table
-                            style={
-                                tableStyle
-                            }
-                        >
+                        <table style={tableStyle}>
                             <thead>
                                 <tr>
-                                    <th
-                                        style={
-                                            thStyle
-                                        }
-                                    >
+                                    <th style={thStyle}>
                                         Пользователь
                                     </th>
 
-                                    <th
-                                        style={
-                                            thStyle
-                                        }
-                                    >
+                                    <th style={thStyle}>
                                         Логин
                                     </th>
 
-                                    <th
-                                        style={
-                                            thStyle
-                                        }
-                                    >
+                                    <th style={thStyle}>
                                         Роль
                                     </th>
 
-                                    <th
-                                        style={
-                                            thStyle
-                                        }
-                                    >
+                                    <th style={thStyle}>
                                         Статус
                                     </th>
 
-                                    <th
-                                        style={
-                                            thStyle
-                                        }
-                                    >
+                                    <th style={thStyle}>
                                         Создан
                                     </th>
 
                                     <th
                                         style={{
                                             ...thStyle,
+
                                             textAlign:
                                                 'right',
                                         }}
@@ -708,11 +773,7 @@ export default function UsersPage() {
                                                 user.id
                                             }
                                         >
-                                            <td
-                                                style={
-                                                    tdStyle
-                                                }
-                                            >
+                                            <td style={tdStyle}>
                                                 <strong>
                                                     {
                                                         user.fullName
@@ -720,22 +781,14 @@ export default function UsersPage() {
                                                 </strong>
                                             </td>
 
-                                            <td
-                                                style={
-                                                    tdStyle
-                                                }
-                                            >
+                                            <td style={tdStyle}>
                                                 @
                                                 {
                                                     user.login
                                                 }
                                             </td>
 
-                                            <td
-                                                style={
-                                                    tdStyle
-                                                }
-                                            >
+                                            <td style={tdStyle}>
                                                 <span
                                                     style={
                                                         roleBadgeStyle
@@ -747,14 +800,11 @@ export default function UsersPage() {
                                                 </span>
                                             </td>
 
-                                            <td
-                                                style={
-                                                    tdStyle
-                                                }
-                                            >
+                                            <td style={tdStyle}>
                                                 <span
                                                     style={{
                                                         ...statusBadgeStyle,
+
                                                         opacity:
                                                             user.isActive
                                                                 ? 1
@@ -767,11 +817,7 @@ export default function UsersPage() {
                                                 </span>
                                             </td>
 
-                                            <td
-                                                style={
-                                                    tdStyle
-                                                }
-                                            >
+                                            <td style={tdStyle}>
                                                 {formatDate(
                                                     user.createdAtUtc,
                                                 )}
@@ -780,6 +826,7 @@ export default function UsersPage() {
                                             <td
                                                 style={{
                                                     ...tdStyle,
+
                                                     textAlign:
                                                         'right',
                                                 }}
@@ -813,10 +860,8 @@ export default function UsersPage() {
 
             {showCreateModal && (
                 <ModalOverlay
-                    onClose={() =>
-                        setShowCreateModal(
-                            false,
-                        )
+                    onClose={
+                        closeCreateModal
                     }
                 >
                     <form
@@ -827,10 +872,8 @@ export default function UsersPage() {
                     >
                         <ModalHeader
                             title="Новый пользователь"
-                            onClose={() =>
-                                setShowCreateModal(
-                                    false,
-                                )
+                            onClose={
+                                closeCreateModal
                             }
                         />
 
@@ -838,7 +881,9 @@ export default function UsersPage() {
                             style={{
                                 display:
                                     'grid',
-                                gap: 16,
+
+                                gap:
+                                    18,
                             }}
                         >
                             <Field
@@ -846,6 +891,7 @@ export default function UsersPage() {
                                 value={
                                     createForm.fullName
                                 }
+                                placeholder="Например: Иван Петров"
                                 onChange={(
                                     value,
                                 ) =>
@@ -854,6 +900,7 @@ export default function UsersPage() {
                                             current,
                                         ) => ({
                                             ...current,
+
                                             fullName:
                                                 value,
                                         }),
@@ -866,6 +913,7 @@ export default function UsersPage() {
                                 value={
                                     createForm.login
                                 }
+                                placeholder="Например: ivan"
                                 onChange={(
                                     value,
                                 ) =>
@@ -874,110 +922,142 @@ export default function UsersPage() {
                                             current,
                                         ) => ({
                                             ...current,
-                                            login: value,
+
+                                            login:
+                                                value,
                                         }),
                                     )
                                 }
                             />
 
-                            <label
-                                style={
-                                    fieldStyle
-                                }
-                            >
+                            <label style={fieldStyle}>
                                 <span>
                                     Пароль
                                 </span>
 
-                                <input
-                                    type="password"
-                                    value={
-                                        createForm.password
-                                    }
-                                    onChange={(
-                                        event,
-                                    ) =>
-                                        setCreateForm(
-                                            (
-                                                current,
-                                            ) => ({
-                                                ...current,
-                                                password:
-                                                    event
-                                                        .target
-                                                        .value,
-                                            }),
-                                        )
-                                    }
+                                <div
                                     style={
-                                        inputStyle
+                                        passwordWrapperStyle
                                     }
-                                />
+                                >
+                                    <input
+                                        type={
+                                            showPassword
+                                                ? 'text'
+                                                : 'password'
+                                        }
+                                        value={
+                                            createForm.password
+                                        }
+                                        onChange={(
+                                            event,
+                                        ) =>
+                                            setCreateForm(
+                                                (
+                                                    current,
+                                                ) => ({
+                                                    ...current,
+
+                                                    password:
+                                                        event
+                                                            .target
+                                                            .value,
+                                                }),
+                                            )
+                                        }
+                                        placeholder="Введите пароль"
+                                        autoComplete="new-password"
+                                        style={{
+                                            ...inputStyle,
+
+                                            paddingRight:
+                                                50,
+                                        }}
+                                    />
+
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setShowPassword(
+                                                (
+                                                    current,
+                                                ) =>
+                                                    !current,
+                                            )
+                                        }
+                                        style={
+                                            passwordToggleStyle
+                                        }
+                                        title={
+                                            showPassword
+                                                ? 'Скрыть пароль'
+                                                : 'Показать пароль'
+                                        }
+                                        aria-label={
+                                            showPassword
+                                                ? 'Скрыть пароль'
+                                                : 'Показать пароль'
+                                        }
+                                    >
+                                        {showPassword ? (
+                                            <EyeOff
+                                                size={
+                                                    19
+                                                }
+                                            />
+                                        ) : (
+                                            <Eye
+                                                size={
+                                                    19
+                                                }
+                                            />
+                                        )}
+                                    </button>
+                                </div>
                             </label>
 
-                            <label
-                                style={
-                                    fieldStyle
-                                }
-                            >
+                            <label style={fieldStyle}>
                                 <span>
                                     Роль
                                 </span>
 
-                                <select
+                                <RoleDropdown
                                     value={
                                         createForm.role
                                     }
+                                    isOpen={
+                                        roleDropdownOpen
+                                    }
+                                    onOpenChange={
+                                        setRoleDropdownOpen
+                                    }
                                     onChange={(
-                                        event,
-                                    ) =>
+                                        role,
+                                    ) => {
                                         setCreateForm(
                                             (
                                                 current,
                                             ) => ({
                                                 ...current,
-                                                role:
-                                                    event
-                                                        .target
-                                                        .value,
+
+                                                role,
                                             }),
-                                        )
-                                    }
-                                    style={
-                                        inputStyle
-                                    }
-                                >
-                                    <option value="Administrator">
-                                        Администратор
-                                    </option>
+                                        );
 
-                                    <option value="Printer">
-                                        Печатник
-                                    </option>
-
-                                    <option value="PlotterOperator">
-                                        Плоттерщик
-                                    </option>
-
-                                    <option value="Viewer">
-                                        Наблюдатель
-                                    </option>
-                                </select>
+                                        setRoleDropdownOpen(
+                                            false,
+                                        );
+                                    }}
+                                />
                             </label>
                         </div>
 
-                        <div
-                            style={
-                                modalFooterStyle
-                            }
-                        >
+                        <div style={modalFooterStyle}>
                             <button
                                 type="button"
                                 className="button secondary"
-                                onClick={() =>
-                                    setShowCreateModal(
-                                        false,
-                                    )
+                                onClick={
+                                    closeCreateModal
                                 }
                             >
                                 Отмена
@@ -1012,6 +1092,7 @@ export default function UsersPage() {
                     <div
                         style={{
                             ...modalStyle,
+
                             width:
                                 'min(1050px, 96vw)',
                         }}
@@ -1025,20 +1106,7 @@ export default function UsersPage() {
                             }
                         />
 
-                        <div
-                            style={{
-                                display:
-                                    'flex',
-                                justifyContent:
-                                    'space-between',
-                                gap: 16,
-                                alignItems:
-                                    'center',
-                                flexWrap:
-                                    'wrap',
-                                marginBottom: 18,
-                            }}
-                        >
+                        <div style={accessHeaderStyle}>
                             <div>
                                 <div
                                     style={{
@@ -1054,7 +1122,8 @@ export default function UsersPage() {
                                 <div
                                     style={{
                                         color:
-                                            'var(--text-muted)',
+                                            '#7e8a98',
+
                                         marginTop:
                                             4,
                                     }}
@@ -1072,7 +1141,10 @@ export default function UsersPage() {
                                         style={{
                                             display:
                                                 'flex',
-                                            gap: 8,
+
+                                            gap:
+                                                8,
+
                                             flexWrap:
                                                 'wrap',
                                         }}
@@ -1105,21 +1177,21 @@ export default function UsersPage() {
                             <div
                                 style={{
                                     ...messageStyle,
-                                    margin: 0,
+
+                                    margin:
+                                        0,
+
+                                    color:
+                                        '#cbd5e1',
                                 }}
                             >
                                 Администратор имеет
                                 полный доступ ко всем
                                 категориям и операциям.
-                                Ограничить его права
-                                нельзя.
+                                Ограничить его права нельзя.
                             </div>
                         ) : loadingAccesses ? (
-                            <div
-                                style={
-                                    emptyStateStyle
-                                }
-                            >
+                            <div style={emptyStateStyle}>
                                 Загрузка прав...
                             </div>
                         ) : (
@@ -1129,58 +1201,30 @@ export default function UsersPage() {
                                         'auto',
                                 }}
                             >
-                                <table
-                                    style={
-                                        tableStyle
-                                    }
-                                >
+                                <table style={tableStyle}>
                                     <thead>
                                         <tr>
-                                            <th
-                                                style={
-                                                    thStyle
-                                                }
-                                            >
+                                            <th style={thStyle}>
                                                 Категория
                                             </th>
 
-                                            <th
-                                                style={
-                                                    centerThStyle
-                                                }
-                                            >
+                                            <th style={centerThStyle}>
                                                 Просмотр
                                             </th>
 
-                                            <th
-                                                style={
-                                                    centerThStyle
-                                                }
-                                            >
+                                            <th style={centerThStyle}>
                                                 Приход
                                             </th>
 
-                                            <th
-                                                style={
-                                                    centerThStyle
-                                                }
-                                            >
+                                            <th style={centerThStyle}>
                                                 Расход
                                             </th>
 
-                                            <th
-                                                style={
-                                                    centerThStyle
-                                                }
-                                            >
+                                            <th style={centerThStyle}>
                                                 Инвентаризация
                                             </th>
 
-                                            <th
-                                                style={
-                                                    centerThStyle
-                                                }
-                                            >
+                                            <th style={centerThStyle}>
                                                 Всё
                                             </th>
                                         </tr>
@@ -1297,11 +1341,7 @@ export default function UsersPage() {
                             </div>
                         )}
 
-                        <div
-                            style={
-                                modalFooterStyle
-                            }
-                        >
+                        <div style={modalFooterStyle}>
                             <button
                                 type="button"
                                 className="button secondary"
@@ -1346,6 +1386,250 @@ export default function UsersPage() {
     );
 }
 
+function RoleDropdown({
+    value,
+    isOpen,
+    onOpenChange,
+    onChange,
+}: {
+    value: string;
+    isOpen: boolean;
+    onOpenChange: (value: boolean) => void;
+    onChange: (value: string) => void;
+}) {
+    const wrapperRef =
+        useRef<HTMLDivElement | null>(
+            null,
+        );
+
+    const selected =
+        roleOptions.find(
+            (option) =>
+                option.value === value,
+        ) ?? roleOptions[1];
+
+    useEffect(() => {
+        function handleMouseDown(
+            event: MouseEvent,
+        ) {
+            if (
+                wrapperRef.current &&
+                !wrapperRef.current.contains(
+                    event.target as Node,
+                )
+            ) {
+                onOpenChange(false);
+            }
+        }
+
+        document.addEventListener(
+            'mousedown',
+            handleMouseDown,
+        );
+
+        return () =>
+            document.removeEventListener(
+                'mousedown',
+                handleMouseDown,
+            );
+    }, [onOpenChange]);
+
+    return (
+        <div
+            ref={wrapperRef}
+            style={dropdownWrapperStyle}
+        >
+            <button
+                type="button"
+                onClick={() =>
+                    onOpenChange(!isOpen)
+                }
+                style={{
+                    ...dropdownButtonStyle,
+
+                    borderColor:
+                        isOpen
+                            ? '#3b82f6'
+                            : '#303a49',
+
+                    boxShadow:
+                        isOpen
+                            ? '0 0 0 3px rgba(59,130,246,.10)'
+                            : 'none',
+                }}
+            >
+                <div
+                    style={{
+                        minWidth:
+                            0,
+
+                        textAlign:
+                            'left',
+                    }}
+                >
+                    <div
+                        style={{
+                            color:
+                                '#f8fafc',
+
+                            fontWeight:
+                                700,
+
+                            fontSize:
+                                14,
+                        }}
+                    >
+                        {selected.label}
+                    </div>
+
+                    <div
+                        style={{
+                            color:
+                                '#78879a',
+
+                            fontSize:
+                                11,
+
+                            marginTop:
+                                3,
+
+                            whiteSpace:
+                                'nowrap',
+
+                            overflow:
+                                'hidden',
+
+                            textOverflow:
+                                'ellipsis',
+                        }}
+                    >
+                        {
+                            selected.description
+                        }
+                    </div>
+                </div>
+
+                <ChevronDown
+                    size={19}
+                    style={{
+                        flex:
+                            '0 0 auto',
+
+                        color:
+                            '#8fa0b5',
+
+                        transform:
+                            isOpen
+                                ? 'rotate(180deg)'
+                                : 'rotate(0deg)',
+
+                        transition:
+                            'transform .16s ease',
+                    }}
+                />
+            </button>
+
+            {isOpen && (
+                <div style={dropdownMenuStyle}>
+                    {roleOptions.map(
+                        (option) => {
+                            const isSelected =
+                                option.value ===
+                                value;
+
+                            return (
+                                <button
+                                    key={
+                                        option.value
+                                    }
+                                    type="button"
+                                    onClick={() =>
+                                        onChange(
+                                            option.value,
+                                        )
+                                    }
+                                    style={{
+                                        ...dropdownOptionStyle,
+
+                                        background:
+                                            isSelected
+                                                ? 'rgba(59,130,246,.14)'
+                                                : 'transparent',
+
+                                        borderColor:
+                                            isSelected
+                                                ? 'rgba(59,130,246,.22)'
+                                                : 'transparent',
+                                    }}
+                                >
+                                    <div
+                                        style={{
+                                            minWidth:
+                                                0,
+
+                                            textAlign:
+                                                'left',
+                                        }}
+                                    >
+                                        <div
+                                            style={{
+                                                color:
+                                                    '#f1f5f9',
+
+                                                fontWeight:
+                                                    700,
+
+                                                fontSize:
+                                                    13,
+                                            }}
+                                        >
+                                            {
+                                                option.label
+                                            }
+                                        </div>
+
+                                        <div
+                                            style={{
+                                                color:
+                                                    '#718096',
+
+                                                fontSize:
+                                                    11,
+
+                                                marginTop:
+                                                    3,
+                                            }}
+                                        >
+                                            {
+                                                option.description
+                                            }
+                                        </div>
+                                    </div>
+
+                                    {isSelected && (
+                                        <Check
+                                            size={
+                                                18
+                                            }
+                                            style={{
+                                                color:
+                                                    '#60a5fa',
+
+                                                flex:
+                                                    '0 0 auto',
+                                            }}
+                                        />
+                                    )}
+                                </button>
+                            );
+                        },
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
 function StatCard({
     icon,
     label,
@@ -1357,38 +1641,16 @@ function StatCard({
 }) {
     return (
         <div style={statCardStyle}>
-            <div
-                style={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: 12,
-                    display: 'grid',
-                    placeItems: 'center',
-                    background:
-                        'rgba(255,255,255,.05)',
-                }}
-            >
+            <div style={statIconStyle}>
                 {icon}
             </div>
 
             <div>
-                <div
-                    style={{
-                        fontSize: 13,
-                        color:
-                            'var(--text-muted)',
-                    }}
-                >
+                <div style={statLabelStyle}>
                     {label}
                 </div>
 
-                <div
-                    style={{
-                        fontSize: 25,
-                        fontWeight: 800,
-                        marginTop: 3,
-                    }}
-                >
+                <div style={statValueStyle}>
                     {value}
                 </div>
             </div>
@@ -1399,18 +1661,23 @@ function StatCard({
 function Field({
     label,
     value,
+    placeholder,
     onChange,
 }: {
     label: string;
     value: string;
+    placeholder?: string;
     onChange: (value: string) => void;
 }) {
     return (
         <label style={fieldStyle}>
-            <span>{label}</span>
+            <span>
+                {label}
+            </span>
 
             <input
                 value={value}
+                placeholder={placeholder}
                 onChange={(event) =>
                     onChange(
                         event.target.value,
@@ -1433,7 +1700,9 @@ function PermissionCell({
         <td
             style={{
                 ...tdStyle,
-                textAlign: 'center',
+
+                textAlign:
+                    'center',
             }}
         >
             <input
@@ -1445,11 +1714,17 @@ function PermissionCell({
                     )
                 }
                 style={{
-                    width: 18,
-                    height: 18,
-                    cursor: 'pointer',
+                    width:
+                        18,
+
+                    height:
+                        18,
+
+                    cursor:
+                        'pointer',
+
                     accentColor:
-                        '#60a5fa',
+                        '#3b82f6',
                 }}
             />
         </td>
@@ -1488,21 +1763,13 @@ function ModalHeader({
     onClose: () => void;
 }) {
     return (
-        <div
-            style={{
-                display: 'flex',
-                justifyContent:
-                    'space-between',
-                alignItems: 'center',
-                gap: 16,
-                marginBottom: 22,
-            }}
-        >
+        <div style={modalHeaderStyle}>
             <div>
                 <p
                     className="eyebrow"
                     style={{
-                        marginBottom: 5,
+                        marginBottom:
+                            5,
                     }}
                 >
                     ADMINISTRATION
@@ -1510,7 +1777,14 @@ function ModalHeader({
 
                 <h2
                     style={{
-                        margin: 0,
+                        margin:
+                            0,
+
+                        fontSize:
+                            24,
+
+                        color:
+                            '#f8fafc',
                     }}
                 >
                     {title}
@@ -1522,7 +1796,7 @@ function ModalHeader({
                 onClick={onClose}
                 style={iconButtonStyle}
             >
-                <X size={19} />
+                <X size={20} />
             </button>
         </div>
     );
@@ -1558,158 +1832,609 @@ function formatDate(
 
     return new Date(
         value,
-    ).toLocaleDateString('ru-RU');
+    ).toLocaleDateString(
+        'ru-RU',
+    );
 }
 
+const headingActionsStyle: CSSProperties = {
+    display:
+        'flex',
+
+    gap:
+        10,
+
+    flexWrap:
+        'wrap',
+};
+
 const statsGrid: CSSProperties = {
-    display: 'grid',
+    display:
+        'grid',
+
     gridTemplateColumns:
         'repeat(4, minmax(0, 1fr))',
-    gap: 14,
-    marginBottom: 18,
+
+    gap:
+        14,
+
+    marginBottom:
+        18,
 };
 
 const statCardStyle: CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 14,
-    padding: 18,
-    borderRadius: 16,
+    display:
+        'flex',
+
+    alignItems:
+        'center',
+
+    gap:
+        14,
+
+    padding:
+        18,
+
+    borderRadius:
+        14,
+
     border:
-        '1px solid rgba(255,255,255,.08)',
+        '1px solid #222b35',
+
     background:
-        'rgba(255,255,255,.025)',
+        'linear-gradient(145deg, rgba(19,26,35,.96), rgba(12,17,23,.96))',
+};
+
+const statIconStyle: CSSProperties = {
+    width:
+        42,
+
+    height:
+        42,
+
+    borderRadius:
+        12,
+
+    display:
+        'grid',
+
+    placeItems:
+        'center',
+
+    background:
+        'rgba(255,255,255,.05)',
+
+    color:
+        '#8eb9ff',
+};
+
+const statLabelStyle: CSSProperties = {
+    fontSize:
+        12,
+
+    color:
+        '#8b98a8',
+};
+
+const statValueStyle: CSSProperties = {
+    fontSize:
+        25,
+
+    fontWeight:
+        800,
+
+    marginTop:
+        3,
+
+    color:
+        '#f8fafc',
+};
+
+const panelToolbarStyle: CSSProperties = {
+    display:
+        'flex',
+
+    justifyContent:
+        'space-between',
+
+    alignItems:
+        'center',
+
+    gap:
+        16,
+
+    flexWrap:
+        'wrap',
+
+    padding:
+        18,
+
+    borderBottom:
+        '1px solid rgba(255,255,255,.06)',
+};
+
+const searchWrapperStyle: CSSProperties = {
+    position:
+        'relative',
+
+    minWidth:
+        300,
 };
 
 const tableStyle: CSSProperties = {
-    width: '100%',
-    borderCollapse: 'collapse',
-    minWidth: 760,
+    width:
+        '100%',
+
+    borderCollapse:
+        'collapse',
+
+    minWidth:
+        760,
 };
 
 const thStyle: CSSProperties = {
-    textAlign: 'left',
-    padding: '12px 14px',
-    fontSize: 12,
-    color: 'var(--text-muted)',
-    fontWeight: 700,
-    textTransform: 'uppercase',
-    letterSpacing: '.06em',
+    textAlign:
+        'left',
+
+    padding:
+        '12px 14px',
+
+    fontSize:
+        11,
+
+    color:
+        '#7e8a98',
+
+    fontWeight:
+        700,
+
+    textTransform:
+        'uppercase',
+
+    letterSpacing:
+        '.06em',
+
     borderBottom:
         '1px solid rgba(255,255,255,.08)',
 };
 
 const centerThStyle: CSSProperties = {
     ...thStyle,
-    textAlign: 'center',
+
+    textAlign:
+        'center',
 };
 
 const tdStyle: CSSProperties = {
-    padding: '14px',
+    padding:
+        '14px',
+
     borderBottom:
         '1px solid rgba(255,255,255,.06)',
-    verticalAlign: 'middle',
+
+    verticalAlign:
+        'middle',
+
+    color:
+        '#d9e1ea',
+
+    fontSize:
+        13,
 };
 
 const inputStyle: CSSProperties = {
-    width: '100%',
-    minHeight: 42,
-    boxSizing: 'border-box',
-    borderRadius: 10,
+    width:
+        '100%',
+
+    minHeight:
+        52,
+
+    boxSizing:
+        'border-box',
+
+    borderRadius:
+        11,
+
     border:
-        '1px solid rgba(255,255,255,.1)',
+        '1px solid #303a49',
+
     background:
-        'rgba(255,255,255,.04)',
-    color: 'inherit',
-    outline: 'none',
-    padding: '10px 12px',
+        '#1a2332',
+
+    color:
+        '#f8fafc',
+
+    outline:
+        'none',
+
+    padding:
+        '12px 15px',
+
+    fontSize:
+        14,
 };
 
 const fieldStyle: CSSProperties = {
-    display: 'grid',
-    gap: 7,
-    fontWeight: 600,
+    display:
+        'grid',
+
+    gap:
+        8,
+
+    fontWeight:
+        700,
+
+    color:
+        '#e5e7eb',
+
+    fontSize:
+        14,
+};
+
+const passwordWrapperStyle: CSSProperties = {
+    position:
+        'relative',
+
+    display:
+        'flex',
+
+    alignItems:
+        'center',
+};
+
+const passwordToggleStyle: CSSProperties = {
+    position:
+        'absolute',
+
+    right:
+        8,
+
+    width:
+        38,
+
+    height:
+        38,
+
+    display:
+        'grid',
+
+    placeItems:
+        'center',
+
+    border:
+        'none',
+
+    borderRadius:
+        9,
+
+    background:
+        'transparent',
+
+    color:
+        '#91a0b2',
+
+    cursor:
+        'pointer',
+};
+
+const dropdownWrapperStyle: CSSProperties = {
+    position:
+        'relative',
+
+    width:
+        '100%',
+};
+
+const dropdownButtonStyle: CSSProperties = {
+    width:
+        '100%',
+
+    minHeight:
+        58,
+
+    padding:
+        '10px 14px',
+
+    display:
+        'flex',
+
+    alignItems:
+        'center',
+
+    justifyContent:
+        'space-between',
+
+    gap:
+        15,
+
+    border:
+        '1px solid #303a49',
+
+    borderRadius:
+        11,
+
+    background:
+        '#1a2332',
+
+    color:
+        '#f8fafc',
+
+    cursor:
+        'pointer',
+
+    transition:
+        'border-color .16s ease, box-shadow .16s ease, background .16s ease',
+};
+
+const dropdownMenuStyle: CSSProperties = {
+    position:
+        'absolute',
+
+    top:
+        'calc(100% + 8px)',
+
+    left:
+        0,
+
+    right:
+        0,
+
+    zIndex:
+        1200,
+
+    padding:
+        7,
+
+    border:
+        '1px solid #303b4b',
+
+    borderRadius:
+        12,
+
+    background:
+        '#111a27',
+
+    boxShadow:
+        '0 20px 50px rgba(0,0,0,.5)',
+};
+
+const dropdownOptionStyle: CSSProperties = {
+    width:
+        '100%',
+
+    display:
+        'flex',
+
+    alignItems:
+        'center',
+
+    justifyContent:
+        'space-between',
+
+    gap:
+        15,
+
+    padding:
+        '11px 12px',
+
+    border:
+        '1px solid transparent',
+
+    borderRadius:
+        9,
+
+    color:
+        '#f8fafc',
+
+    cursor:
+        'pointer',
 };
 
 const overlayStyle: CSSProperties = {
-    position: 'fixed',
-    inset: 0,
-    zIndex: 1000,
-    display: 'grid',
-    placeItems: 'center',
-    padding: 20,
+    position:
+        'fixed',
+
+    inset:
+        0,
+
+    zIndex:
+        1000,
+
+    display:
+        'grid',
+
+    placeItems:
+        'center',
+
+    padding:
+        20,
+
     background:
         'rgba(0,0,0,.72)',
-    backdropFilter: 'blur(6px)',
+
+    backdropFilter:
+        'blur(7px)',
 };
 
 const modalStyle: CSSProperties = {
-    width: 'min(620px, 96vw)',
-    maxHeight: '90vh',
-    overflowY: 'auto',
-    borderRadius: 18,
+    width:
+        'min(650px, 96vw)',
+
+    maxHeight:
+        '90vh',
+
+    overflowY:
+        'auto',
+
+    borderRadius:
+        20,
+
     border:
-        '1px solid rgba(255,255,255,.1)',
-    background: '#111827',
-    padding: 22,
+        '1px solid #263245',
+
+    background:
+        '#111a2a',
+
+    padding:
+        24,
+
     boxShadow:
-        '0 24px 80px rgba(0,0,0,.45)',
+        '0 30px 100px rgba(0,0,0,.55)',
+};
+
+const modalHeaderStyle: CSSProperties = {
+    display:
+        'flex',
+
+    justifyContent:
+        'space-between',
+
+    alignItems:
+        'center',
+
+    gap:
+        16,
+
+    marginBottom:
+        24,
 };
 
 const modalFooterStyle: CSSProperties = {
-    display: 'flex',
-    justifyContent: 'flex-end',
-    gap: 10,
-    marginTop: 22,
+    display:
+        'flex',
+
+    justifyContent:
+        'flex-end',
+
+    gap:
+        10,
+
+    marginTop:
+        24,
+};
+
+const accessHeaderStyle: CSSProperties = {
+    display:
+        'flex',
+
+    justifyContent:
+        'space-between',
+
+    gap:
+        16,
+
+    alignItems:
+        'center',
+
+    flexWrap:
+        'wrap',
+
+    marginBottom:
+        18,
 };
 
 const iconButtonStyle: CSSProperties = {
-    width: 38,
-    height: 38,
-    border: 0,
-    borderRadius: 10,
-    display: 'grid',
-    placeItems: 'center',
-    cursor: 'pointer',
-    color: 'inherit',
+    width:
+        42,
+
+    height:
+        42,
+
+    border:
+        '1px solid rgba(255,255,255,.04)',
+
+    borderRadius:
+        11,
+
+    display:
+        'grid',
+
+    placeItems:
+        'center',
+
+    cursor:
+        'pointer',
+
+    color:
+        '#d8e0ea',
+
     background:
         'rgba(255,255,255,.06)',
 };
 
 const emptyStateStyle: CSSProperties = {
-    padding: 34,
-    textAlign: 'center',
-    color: 'var(--text-muted)',
+    padding:
+        34,
+
+    textAlign:
+        'center',
+
+    color:
+        '#7e8a98',
 };
 
 const messageStyle: CSSProperties = {
-    padding: '13px 15px',
-    borderRadius: 12,
+    padding:
+        '13px 15px',
+
+    borderRadius:
+        12,
+
     border:
         '1px solid rgba(255,255,255,.1)',
-    marginBottom: 16,
+
+    marginBottom:
+        16,
 };
 
 const roleBadgeStyle: CSSProperties = {
-    display: 'inline-flex',
-    padding: '5px 9px',
-    borderRadius: 999,
+    display:
+        'inline-flex',
+
+    padding:
+        '5px 9px',
+
+    borderRadius:
+        999,
+
     background:
         'rgba(96,165,250,.12)',
+
     border:
         '1px solid rgba(96,165,250,.2)',
-    fontSize: 12,
-    fontWeight: 700,
+
+    color:
+        '#bfdbfe',
+
+    fontSize:
+        12,
+
+    fontWeight:
+        700,
 };
 
 const statusBadgeStyle: CSSProperties = {
-    display: 'inline-flex',
-    padding: '5px 9px',
-    borderRadius: 999,
+    display:
+        'inline-flex',
+
+    padding:
+        '5px 9px',
+
+    borderRadius:
+        999,
+
     background:
         'rgba(74,222,128,.1)',
+
     border:
         '1px solid rgba(74,222,128,.18)',
-    fontSize: 12,
-    fontWeight: 700,
+
+    color:
+        '#86efac',
+
+    fontSize:
+        12,
+
+    fontWeight:
+        700,
 };

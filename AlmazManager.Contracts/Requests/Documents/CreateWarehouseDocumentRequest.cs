@@ -2,6 +2,7 @@
 
 public sealed record CreateWarehouseDocumentRequest(
     string Type,
-    Guid UserId,
+    string? Supplier,
+    string? ExternalNumber,
     string? Comment,
     List<CreateWarehouseDocumentItemRequest> Items);

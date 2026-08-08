@@ -2,17 +2,21 @@ import {
     useEffect,
     useMemo,
     useState,
+    type CSSProperties,
     type FormEvent,
 } from 'react';
 
 import {
     Archive,
+    Check,
     CheckCircle2,
+    ChevronDown,
+    ChevronRight,
     Edit3,
     Package,
+    Palette,
     Plus,
     RefreshCcw,
-    RotateCcw,
     Search,
     X,
 } from 'lucide-react';
@@ -29,6 +33,13 @@ type MaterialCatalogItem = {
     currentQuantity: number;
     belowMinimum: boolean;
     isActive: boolean;
+
+    kind: string;
+    widthMeters?: number | null;
+
+    colorCode?: string | null;
+    colorName?: string | null;
+    colorHex?: string | null;
 };
 
 type MaterialCatalogResponse = {
@@ -47,52 +58,309 @@ type Category = {
 
 type MaterialForm = {
     id?: string;
+
+    kind: 'Standard' | 'Oracal641';
+
     name: string;
     article: string;
+    articlePrefix: string;
+
     categoryId: string;
-    unit: string;
+
     minimumQuantity: string;
     currentQuantity: number;
+
+    widthMeters: string;
+
+    colorCode: string;
+    colorName: string;
+    colorHex: string;
+
     isActive: boolean;
 };
 
+type OracalColor = {
+    code: string;
+    name: string;
+    hex: string;
+};
+
+type StandardMaterialGroup = {
+    key: string;
+    name: string;
+    categoryId: string;
+    categoryName: string;
+
+    materials: MaterialCatalogItem[];
+
+    totalQuantity: number;
+    lowCount: number;
+    emptyCount: number;
+};
+
+type WidthPreset = {
+    id: string;
+    name: string;
+    widths: number[];
+};
+
+const widthPresets: WidthPreset[] = [
+    {
+        id: 'banner',
+        name: 'Баннер',
+        widths: [
+            3.2,
+            2.5,
+            2.2,
+            1.6,
+            1.37,
+            1.1,
+        ],
+    },
+
+    {
+        id: 'film',
+        name: 'Плёнка',
+        widths: [
+            2,
+            1.6,
+            1.52,
+            1.37,
+            1.26,
+            1.05,
+            1,
+        ],
+    },
+];
+
+const oracalPalette: OracalColor[] = [
+    {
+        code: '010',
+        name: 'Белый',
+        hex: '#E7EAEE',
+    },
+    {
+        code: '021',
+        name: 'Жёлтый',
+        hex: '#F2C500',
+    },
+    {
+        code: '031',
+        name: 'Красный',
+        hex: '#AF000B',
+    },
+    {
+        code: '040',
+        name: 'Фиолетовый',
+        hex: '#6A325D',
+    },
+    {
+        code: '041',
+        name: 'Малиновый',
+        hex: '#B51A49',
+    },
+    {
+        code: '042',
+        name: 'Сиреневый',
+        hex: '#8A4B78',
+    },
+    {
+        code: '045',
+        name: 'Светло-розовый',
+        hex: '#E998B7',
+    },
+    {
+        code: '049',
+        name: 'Королевский синий',
+        hex: '#1F4F99',
+    },
+    {
+        code: '050',
+        name: 'Тёмно-синий',
+        hex: '#193A70',
+    },
+    {
+        code: '051',
+        name: 'Гентский синий',
+        hex: '#20589C',
+    },
+    {
+        code: '052',
+        name: 'Лазурный',
+        hex: '#1873A5',
+    },
+    {
+        code: '053',
+        name: 'Светло-синий',
+        hex: '#4C94BC',
+    },
+    {
+        code: '054',
+        name: 'Бирюзовый',
+        hex: '#008E9A',
+    },
+    {
+        code: '055',
+        name: 'Мятный',
+        hex: '#65B9AF',
+    },
+    {
+        code: '056',
+        name: 'Ледяной голубой',
+        hex: '#89C6D0',
+    },
+    {
+        code: '060',
+        name: 'Тёмно-зелёный',
+        hex: '#1F5B3A',
+    },
+    {
+        code: '061',
+        name: 'Зелёный',
+        hex: '#158347',
+    },
+    {
+        code: '062',
+        name: 'Светло-зелёный',
+        hex: '#52A94F',
+    },
+    {
+        code: '063',
+        name: 'Лаймовый',
+        hex: '#A6C83A',
+    },
+    {
+        code: '070',
+        name: 'Чёрный',
+        hex: '#060607',
+    },
+    {
+        code: '071',
+        name: 'Серый',
+        hex: '#80858A',
+    },
+    {
+        code: '072',
+        name: 'Светло-серый',
+        hex: '#B4B8BB',
+    },
+    {
+        code: '073',
+        name: 'Тёмно-серый',
+        hex: '#55595C',
+    },
+    {
+        code: '080',
+        name: 'Коричневый',
+        hex: '#563A2D',
+    },
+    {
+        code: '081',
+        name: 'Светло-коричневый',
+        hex: '#8A684E',
+    },
+    {
+        code: '090',
+        name: 'Серебристый',
+        hex: '#A8AAAB',
+    },
+    {
+        code: '091',
+        name: 'Золотой',
+        hex: '#A48B52',
+    },
+];
+
 const emptyForm: MaterialForm = {
+    kind: 'Standard',
+
     name: '',
     article: '',
+    articlePrefix: '',
+
     categoryId: '',
-    unit: 'Piece',
+
     minimumQuantity: '0',
     currentQuantity: 0,
+
+    widthMeters: '',
+
+    colorCode: '',
+    colorName: '',
+    colorHex: '',
+
     isActive: true,
 };
 
-const numberFormatter = new Intl.NumberFormat('ru-RU', {
-    maximumFractionDigits: 2,
-});
+const numberFormatter =
+    new Intl.NumberFormat(
+        'ru-RU',
+        {
+            maximumFractionDigits: 2,
+        },
+    );
 
 export default function MaterialsPage() {
-    const [materials, setMaterials] = useState<
-        MaterialCatalogItem[]
-    >([]);
+    const [materials, setMaterials] =
+        useState<MaterialCatalogItem[]>([]);
 
-    const [categories, setCategories] = useState<Category[]>([]);
+    const [categories, setCategories] =
+        useState<Category[]>([]);
 
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [error, setError] = useState('');
+    const [loading, setLoading] =
+        useState(true);
 
-    const [search, setSearch] = useState('');
-    const [categoryFilter, setCategoryFilter] =
-        useState('all');
+    const [saving, setSaving] =
+        useState(false);
 
-    const [statusFilter, setStatusFilter] =
-        useState('active');
+    const [error, setError] =
+        useState('');
 
-    const [formOpen, setFormOpen] = useState(false);
+    const [search, setSearch] =
+        useState('');
+
+    const [
+        categoryFilter,
+        setCategoryFilter,
+    ] = useState('all');
+
+    const [
+        statusFilter,
+        setStatusFilter,
+    ] = useState('active');
+
+    const [formOpen, setFormOpen] =
+        useState(false);
+
     const [form, setForm] =
-        useState<MaterialForm>(emptyForm);
+        useState<MaterialForm>(
+            emptyForm,
+        );
 
-    const editing = Boolean(form.id);
+    const [
+        selectedWidths,
+        setSelectedWidths,
+    ] = useState<number[]>([]);
+
+    const [
+        customWidth,
+        setCustomWidth,
+    ] = useState('');
+
+    const [
+        selectedPreset,
+        setSelectedPreset,
+    ] = useState('banner');
+
+    const [
+        expandedGroups,
+        setExpandedGroups,
+    ] = useState<Set<string>>(
+        () => new Set(),
+    );
+
+    const editing =
+        Boolean(form.id);
 
     useEffect(() => {
         loadData();
@@ -108,26 +376,41 @@ export default function MaterialsPage() {
                 categoriesResponse,
             ] = await Promise.all([
                 api.get<MaterialCatalogResponse>(
-                    '/materials/catalog',
+                    '/materials/catalog?pageSize=100',
                 ),
-                api.get<Category[]>('/categories'),
+
+                api.get<Category[]>(
+                    '/categories',
+                ),
             ]);
 
             setMaterials(
-                materialsResponse.data.items ?? [],
+                materialsResponse
+                    .data
+                    .items ?? [],
             );
 
             setCategories(
-                categoriesResponse.data ?? [],
+                categoriesResponse
+                    .data ?? [],
             );
-        } catch (requestError: any) {
+        } catch (
+        requestError: any
+        ) {
             console.error(
                 'Ошибка загрузки материалов:',
                 requestError,
             );
 
             setError(
-                requestError?.response?.data?.message ??
+                requestError
+                    ?.response
+                    ?.data
+                    ?.message ??
+                requestError
+                    ?.response
+                    ?.data
+                    ?.title ??
                 'Не удалось загрузить материалы.',
             );
         } finally {
@@ -135,103 +418,592 @@ export default function MaterialsPage() {
         }
     }
 
-    const categoryMap = useMemo(() => {
-        return new Map(
-            categories.map((category) => [
-                category.id,
-                category.name,
-            ]),
+    const categoryMap =
+        useMemo(
+            () =>
+                new Map(
+                    categories.map(
+                        (
+                            category,
+                        ) => [
+                                category.id,
+                                category.name,
+                            ],
+                    ),
+                ),
+            [categories],
         );
-    }, [categories]);
 
-    const filteredMaterials = useMemo(() => {
-        const normalizedSearch =
-            search.trim().toLowerCase();
+    const filteredMaterials =
+        useMemo(() => {
+            const normalizedSearch =
+                search
+                    .trim()
+                    .toLowerCase();
 
-        return materials.filter((material) => {
-            const matchesSearch =
-                !normalizedSearch ||
-                material.name
-                    .toLowerCase()
-                    .includes(normalizedSearch) ||
-                material.article
-                    .toLowerCase()
-                    .includes(normalizedSearch) ||
-                (
-                    categoryMap.get(
-                        material.categoryId,
-                    ) ?? ''
-                )
-                    .toLowerCase()
-                    .includes(normalizedSearch);
+            return materials.filter(
+                (material) => {
+                    const categoryName =
+                        categoryMap.get(
+                            material.categoryId,
+                        ) ?? '';
 
-            const matchesCategory =
-                categoryFilter === 'all' ||
-                material.categoryId ===
-                categoryFilter;
+                    const colorText =
+                        `${material.colorCode ??
+                            ''
+                            } ${material.colorName ??
+                            ''
+                            }`.toLowerCase();
 
-            let matchesStatus = true;
+                    const matchesSearch =
+                        !normalizedSearch ||
+                        material.name
+                            .toLowerCase()
+                            .includes(
+                                normalizedSearch,
+                            ) ||
+                        material.article
+                            .toLowerCase()
+                            .includes(
+                                normalizedSearch,
+                            ) ||
+                        categoryName
+                            .toLowerCase()
+                            .includes(
+                                normalizedSearch,
+                            ) ||
+                        colorText.includes(
+                            normalizedSearch,
+                        );
 
-            if (statusFilter === 'active') {
-                matchesStatus = material.isActive;
-            }
+                    const matchesCategory =
+                        categoryFilter ===
+                        'all' ||
+                        material.categoryId ===
+                        categoryFilter;
 
-            if (statusFilter === 'archived') {
-                matchesStatus = !material.isActive;
-            }
+                    let matchesStatus = true;
 
-            if (statusFilter === 'low') {
-                matchesStatus =
-                    material.isActive &&
-                    material.belowMinimum &&
-                    material.currentQuantity > 0;
-            }
+                    if (
+                        statusFilter ===
+                        'active'
+                    ) {
+                        matchesStatus =
+                            material.isActive;
+                    }
 
-            if (statusFilter === 'empty') {
-                matchesStatus =
-                    material.isActive &&
-                    material.currentQuantity <= 0;
-            }
+                    if (
+                        statusFilter ===
+                        'archived'
+                    ) {
+                        matchesStatus =
+                            !material.isActive;
+                    }
 
-            return (
-                matchesSearch &&
-                matchesCategory &&
-                matchesStatus
+                    if (
+                        statusFilter ===
+                        'low'
+                    ) {
+                        matchesStatus =
+                            material.isActive &&
+                            material.belowMinimum &&
+                            material.currentQuantity >
+                            0;
+                    }
+
+                    if (
+                        statusFilter ===
+                        'empty'
+                    ) {
+                        matchesStatus =
+                            material.isActive &&
+                            material.currentQuantity <=
+                            0;
+                    }
+
+                    return (
+                        matchesSearch &&
+                        matchesCategory &&
+                        matchesStatus
+                    );
+                },
             );
-        });
-    }, [
-        materials,
-        search,
-        categoryFilter,
-        statusFilter,
-        categoryMap,
-    ]);
+        }, [
+            materials,
+            search,
+            categoryFilter,
+            statusFilter,
+            categoryMap,
+        ]);
 
-    const activeMaterials = materials.filter(
-        (material) => material.isActive,
-    ).length;
+    const standardMaterials =
+        useMemo(
+            () =>
+                filteredMaterials.filter(
+                    (material) =>
+                        material.kind !==
+                        'Oracal641',
+                ),
+            [filteredMaterials],
+        );
 
-    const belowMinimum = materials.filter(
-        (material) =>
-            material.isActive &&
-            material.belowMinimum,
-    ).length;
+    const standardGroups =
+        useMemo(() => {
+            const groups =
+                new Map<
+                    string,
+                    StandardMaterialGroup
+                >();
 
-    const withoutStock = materials.filter(
-        (material) =>
-            material.isActive &&
-            material.currentQuantity <= 0,
-    ).length;
+            for (
+                const material of
+                standardMaterials
+            ) {
+                const normalizedName =
+                    normalizeMaterialGroupName(
+                        material.name,
+                    );
+
+                const key =
+                    `${material.categoryId}::${normalizedName.toLowerCase()}`;
+
+                let group =
+                    groups.get(key);
+
+                if (!group) {
+                    group = {
+                        key,
+
+                        name:
+                            normalizedName,
+
+                        categoryId:
+                            material.categoryId,
+
+                        categoryName:
+                            categoryMap.get(
+                                material.categoryId,
+                            ) ??
+                            'Без категории',
+
+                        materials:
+                            [],
+
+                        totalQuantity:
+                            0,
+
+                        lowCount:
+                            0,
+
+                        emptyCount:
+                            0,
+                    };
+
+                    groups.set(
+                        key,
+                        group,
+                    );
+                }
+
+                group.materials.push(
+                    material,
+                );
+
+                group.totalQuantity +=
+                    material.currentQuantity;
+
+                if (
+                    material.isActive &&
+                    material.belowMinimum
+                ) {
+                    group.lowCount += 1;
+                }
+
+                if (
+                    material.isActive &&
+                    material.currentQuantity <=
+                    0
+                ) {
+                    group.emptyCount += 1;
+                }
+            }
+
+            return Array.from(
+                groups.values(),
+            )
+                .map(
+                    (group) => ({
+                        ...group,
+
+                        materials:
+                            group.materials
+                                .slice()
+                                .sort(
+                                    (
+                                        a,
+                                        b,
+                                    ) =>
+                                        Number(
+                                            b.widthMeters ??
+                                            0,
+                                        ) -
+                                        Number(
+                                            a.widthMeters ??
+                                            0,
+                                        ),
+                                ),
+                    }),
+                )
+                .sort(
+                    (a, b) =>
+                        a.name.localeCompare(
+                            b.name,
+                            'ru',
+                        ),
+                );
+        }, [
+            standardMaterials,
+            categoryMap,
+        ]);
+
+    const oracalMaterials =
+        useMemo(
+            () =>
+                filteredMaterials.filter(
+                    (material) =>
+                        material.kind ===
+                        'Oracal641',
+                ),
+            [filteredMaterials],
+        );
+
+    const oracalRows =
+        useMemo(() => {
+            const rows =
+                new Map<
+                    string,
+                    {
+                        code: string;
+                        name: string;
+                        hex: string;
+
+                        width100?: MaterialCatalogItem;
+                        width127?: MaterialCatalogItem;
+                    }
+                >();
+
+            for (
+                const material of
+                oracalMaterials
+            ) {
+                const code =
+                    material.colorCode ??
+                    '—';
+
+                const key =
+                    code.toLowerCase();
+
+                const current =
+                    rows.get(key) ?? {
+                        code,
+
+                        name:
+                            material.colorName ??
+                            material.name,
+
+                        hex:
+                            material.colorHex ??
+                            '#777777',
+                    };
+
+                if (
+                    Number(
+                        material.widthMeters,
+                    ) === 1
+                ) {
+                    current.width100 =
+                        material;
+                }
+
+                if (
+                    Number(
+                        material.widthMeters,
+                    ) === 1.27
+                ) {
+                    current.width127 =
+                        material;
+                }
+
+                rows.set(
+                    key,
+                    current,
+                );
+            }
+
+            return Array.from(
+                rows.values(),
+            ).sort(
+                (a, b) =>
+                    a.code.localeCompare(
+                        b.code,
+                        'ru',
+                        {
+                            numeric:
+                                true,
+                        },
+                    ),
+            );
+        }, [
+            oracalMaterials,
+        ]);
+
+    const activeMaterials =
+        materials.filter(
+            (material) =>
+                material.isActive,
+        ).length;
+
+    const belowMinimum =
+        materials.filter(
+            (material) =>
+                material.isActive &&
+                material.belowMinimum,
+        ).length;
+
+    const withoutStock =
+        materials.filter(
+            (material) =>
+                material.isActive &&
+                material.currentQuantity <=
+                0,
+        ).length;
+
+    function toggleGroup(
+        key: string,
+    ) {
+        setExpandedGroups(
+            (current) => {
+                const next =
+                    new Set(
+                        current,
+                    );
+
+                if (
+                    next.has(key)
+                ) {
+                    next.delete(
+                        key,
+                    );
+                } else {
+                    next.add(
+                        key,
+                    );
+                }
+
+                return next;
+            },
+        );
+    }
+
+    function expandAllGroups() {
+        setExpandedGroups(
+            new Set(
+                standardGroups.map(
+                    (group) =>
+                        group.key,
+                ),
+            ),
+        );
+    }
+
+    function collapseAllGroups() {
+        setExpandedGroups(
+            new Set(),
+        );
+    }
+
+    function applyPreset(
+        presetId: string,
+    ) {
+        const preset =
+            widthPresets.find(
+                (item) =>
+                    item.id ===
+                    presetId,
+            );
+
+        if (!preset) {
+            return;
+        }
+
+        setSelectedPreset(
+            presetId,
+        );
+
+        setSelectedWidths(
+            preset.widths,
+        );
+    }
+
+    function toggleWidth(
+        width: number,
+    ) {
+        setSelectedWidths(
+            (current) => {
+                if (
+                    current.includes(
+                        width,
+                    )
+                ) {
+                    return current.filter(
+                        (item) =>
+                            item !==
+                            width,
+                    );
+                }
+
+                return [
+                    ...current,
+                    width,
+                ].sort(
+                    (a, b) =>
+                        b - a,
+                );
+            },
+        );
+    }
+
+    function addCustomWidth() {
+        const value =
+            Number(
+                customWidth.replace(
+                    ',',
+                    '.',
+                ),
+            );
+
+        if (
+            Number.isNaN(value) ||
+            value <= 0
+        ) {
+            setError(
+                'Введите корректную ширину.',
+            );
+
+            return;
+        }
+
+        const rounded =
+            Math.round(
+                value * 100,
+            ) / 100;
+
+        setSelectedWidths(
+            (current) => {
+                if (
+                    current.includes(
+                        rounded,
+                    )
+                ) {
+                    return current;
+                }
+
+                return [
+                    ...current,
+                    rounded,
+                ].sort(
+                    (a, b) =>
+                        b - a,
+                );
+            },
+        );
+
+        setCustomWidth('');
+        setError('');
+    }
 
     function openCreate() {
+        const firstCategory =
+            categories.find(
+                (category) =>
+                    category.isActive,
+            );
+
         setForm({
             ...emptyForm,
+
             categoryId:
-                categories.find(
-                    (category) =>
-                        category.isActive,
-                )?.id ?? '',
+                firstCategory?.id ??
+                '',
         });
+
+        setSelectedPreset(
+            'banner',
+        );
+
+        setSelectedWidths(
+            widthPresets[0].widths,
+        );
+
+        setCustomWidth('');
+
+        setError('');
+        setFormOpen(true);
+    }
+
+    function openCreateOracal() {
+        const firstColor =
+            oracalPalette[0];
+
+        const oracalCategory =
+            categories.find(
+                (category) =>
+                    category.isActive &&
+                    category.name
+                        .toLowerCase()
+                        .includes(
+                            'oracal',
+                        ),
+            ) ??
+            categories.find(
+                (category) =>
+                    category.isActive &&
+                    category.name
+                        .toLowerCase()
+                        .includes(
+                            'оракал',
+                        ),
+            ) ??
+            categories.find(
+                (category) =>
+                    category.isActive,
+            );
+
+        setForm({
+            ...emptyForm,
+
+            kind:
+                'Oracal641',
+
+            categoryId:
+                oracalCategory?.id ??
+                '',
+
+            widthMeters:
+                '1',
+
+            colorCode:
+                firstColor.code,
+
+            colorName:
+                firstColor.name,
+
+            colorHex:
+                firstColor.hex,
+        });
+
+        setSelectedWidths([]);
+        setCustomWidth('');
 
         setError('');
         setFormOpen(true);
@@ -241,17 +1013,56 @@ export default function MaterialsPage() {
         material: MaterialCatalogItem,
     ) {
         setForm({
-            id: material.id,
-            name: material.name,
-            article: material.article,
-            categoryId: material.categoryId,
-            unit: material.unit,
+            id:
+                material.id,
+
+            kind:
+                material.kind ===
+                    'Oracal641'
+                    ? 'Oracal641'
+                    : 'Standard',
+
+            name:
+                material.name,
+
+            article:
+                material.article,
+
+            articlePrefix:
+                '',
+
+            categoryId:
+                material.categoryId,
+
             minimumQuantity:
                 material.minimumQuantity.toString(),
+
             currentQuantity:
                 material.currentQuantity,
-            isActive: material.isActive,
+
+            widthMeters:
+                material.widthMeters
+                    ?.toString() ??
+                '',
+
+            colorCode:
+                material.colorCode ??
+                '',
+
+            colorName:
+                material.colorName ??
+                '',
+
+            colorHex:
+                material.colorHex ??
+                '',
+
+            isActive:
+                material.isActive,
         });
+
+        setSelectedWidths([]);
+        setCustomWidth('');
 
         setError('');
         setFormOpen(true);
@@ -263,7 +1074,43 @@ export default function MaterialsPage() {
         }
 
         setFormOpen(false);
-        setForm(emptyForm);
+
+        setForm(
+            emptyForm,
+        );
+
+        setSelectedWidths([]);
+        setCustomWidth('');
+    }
+
+    function selectOracalColor(
+        code: string,
+    ) {
+        const selected =
+            oracalPalette.find(
+                (color) =>
+                    color.code ===
+                    code,
+            );
+
+        if (!selected) {
+            return;
+        }
+
+        setForm(
+            (current) => ({
+                ...current,
+
+                colorCode:
+                    selected.code,
+
+                colorName:
+                    selected.name,
+
+                colorHex:
+                    selected.hex,
+            }),
+        );
     }
 
     async function handleSubmit(
@@ -272,76 +1119,325 @@ export default function MaterialsPage() {
         event.preventDefault();
 
         const minimumQuantity =
-            Number(form.minimumQuantity);
-
-        if (!form.name.trim()) {
-            setError(
-                'Введите название материала.',
+            Number(
+                form.minimumQuantity,
             );
-            return;
-        }
 
-        if (!form.article.trim()) {
-            setError(
-                'Введите артикул материала.',
-            );
-            return;
-        }
-
-        if (!form.categoryId) {
+        if (
+            !form.categoryId
+        ) {
             setError(
                 'Выберите категорию.',
             );
+
             return;
         }
 
         if (
-            Number.isNaN(minimumQuantity) ||
+            Number.isNaN(
+                minimumQuantity,
+            ) ||
             minimumQuantity < 0
         ) {
             setError(
                 'Минимальный остаток должен быть равен нулю или больше.',
             );
+
             return;
         }
-
-        const payload = {
-            name: form.name.trim(),
-            article: form.article.trim(),
-            categoryId: form.categoryId,
-            unit: form.unit,
-            minimumQuantity,
-        };
 
         try {
             setSaving(true);
             setError('');
 
-            if (form.id) {
-                await api.put(
-                    `/materials/${form.id}`,
-                    payload,
-                );
-            } else {
+            /*
+             * РЕДАКТИРОВАНИЕ
+             */
+            if (editing) {
+                const width =
+                    form.widthMeters.trim()
+                        ? Number(
+                            form.widthMeters.replace(
+                                ',',
+                                '.',
+                            ),
+                        )
+                        : null;
+
+                if (
+                    width !== null &&
+                    (
+                        Number.isNaN(
+                            width,
+                        ) ||
+                        width <= 0
+                    )
+                ) {
+                    setError(
+                        'Ширина должна быть больше нуля.',
+                    );
+
+                    return;
+                }
+
+                if (
+                    form.kind ===
+                    'Oracal641'
+                ) {
+                    if (
+                        width !== 1 &&
+                        width !== 1.27
+                    ) {
+                        setError(
+                            'Для ORACAL 641 разрешены ширины 1,00 и 1,27 м.',
+                        );
+
+                        return;
+                    }
+
+                    await api.put(
+                        `/materials/${form.id}`,
+                        {
+                            name:
+                                `ORACAL 641 ${form.colorCode} ${form.colorName} ${formatWidth(
+                                    width,
+                                )}`,
+
+                            article:
+                                `ORACAL-641-${form.colorCode}-${width === 1
+                                    ? '100'
+                                    : '127'
+                                }`,
+
+                            categoryId:
+                                form.categoryId,
+
+                            unit:
+                                'Meter',
+
+                            minimumQuantity,
+
+                            kind:
+                                'Oracal641',
+
+                            widthMeters:
+                                width,
+
+                            colorCode:
+                                form.colorCode,
+
+                            colorName:
+                                form.colorName,
+
+                            colorHex:
+                                form.colorHex,
+                        },
+                    );
+                } else {
+                    if (
+                        !form.name.trim()
+                    ) {
+                        setError(
+                            'Введите название материала.',
+                        );
+
+                        return;
+                    }
+
+                    if (
+                        !form.article.trim()
+                    ) {
+                        setError(
+                            'Введите артикул материала.',
+                        );
+
+                        return;
+                    }
+
+                    await api.put(
+                        `/materials/${form.id}`,
+                        {
+                            name:
+                                form.name.trim(),
+
+                            article:
+                                form.article.trim(),
+
+                            categoryId:
+                                form.categoryId,
+
+                            unit:
+                                'Piece',
+
+                            minimumQuantity,
+
+                            kind:
+                                'Standard',
+
+                            widthMeters:
+                                width,
+
+                            colorCode:
+                                null,
+
+                            colorName:
+                                null,
+
+                            colorHex:
+                                null,
+                        },
+                    );
+                }
+            }
+
+            /*
+             * СОЗДАНИЕ ORACAL
+             */
+            else if (
+                form.kind ===
+                'Oracal641'
+            ) {
+                const width =
+                    Number(
+                        form.widthMeters,
+                    );
+
+                if (
+                    width !== 1 &&
+                    width !== 1.27
+                ) {
+                    setError(
+                        'Для ORACAL 641 разрешены ширины 1,00 и 1,27 м.',
+                    );
+
+                    return;
+                }
+
                 await api.post(
                     '/materials',
-                    payload,
+                    {
+                        name:
+                            `ORACAL 641 ${form.colorCode} ${form.colorName} ${formatWidth(
+                                width,
+                            )}`,
+
+                        article:
+                            `ORACAL-641-${form.colorCode}-${width === 1
+                                ? '100'
+                                : '127'
+                            }`,
+
+                        categoryId:
+                            form.categoryId,
+
+                        unit:
+                            'Meter',
+
+                        minimumQuantity,
+
+                        kind:
+                            'Oracal641',
+
+                        widthMeters:
+                            width,
+
+                        colorCode:
+                            form.colorCode,
+
+                        colorName:
+                            form.colorName,
+
+                        colorHex:
+                            form.colorHex,
+                    },
+                );
+            }
+
+            /*
+             * МАССОВОЕ СОЗДАНИЕ
+             * ОБЫЧНЫХ МАТЕРИАЛОВ
+             */
+            else {
+                if (
+                    !form.name.trim()
+                ) {
+                    setError(
+                        'Введите название материала.',
+                    );
+
+                    return;
+                }
+
+                if (
+                    !form.articlePrefix.trim()
+                ) {
+                    setError(
+                        'Введите префикс артикула.',
+                    );
+
+                    return;
+                }
+
+                if (
+                    selectedWidths.length ===
+                    0
+                ) {
+                    setError(
+                        'Выберите хотя бы одну ширину.',
+                    );
+
+                    return;
+                }
+
+                await api.post(
+                    '/materials/bulk-standard',
+                    {
+                        name:
+                            form.name.trim(),
+
+                        articlePrefix:
+                            form.articlePrefix
+                                .trim()
+                                .toUpperCase(),
+
+                        categoryId:
+                            form.categoryId,
+
+                        minimumQuantity,
+
+                        widths:
+                            selectedWidths,
+                    },
                 );
             }
 
             setFormOpen(false);
-            setForm(emptyForm);
+
+            setForm(
+                emptyForm,
+            );
+
+            setSelectedWidths([]);
+            setCustomWidth('');
 
             await loadData();
-        } catch (requestError: any) {
+        } catch (
+        requestError: any
+        ) {
             console.error(
                 'Ошибка сохранения материала:',
                 requestError,
             );
 
             setError(
-                requestError?.response?.data?.message ??
-                requestError?.response?.data?.title ??
+                requestError
+                    ?.response
+                    ?.data
+                    ?.message ??
+                requestError
+                    ?.response
+                    ?.data
+                    ?.title ??
                 'Не удалось сохранить материал.',
             );
         } finally {
@@ -362,7 +1458,11 @@ export default function MaterialsPage() {
                 ? `Архивировать материал «${material.name}»?`
                 : `Восстановить материал «${material.name}»?`;
 
-        if (!window.confirm(confirmation)) {
+        if (
+            !window.confirm(
+                confirmation,
+            )
+        ) {
             return;
         }
 
@@ -377,19 +1477,19 @@ export default function MaterialsPage() {
 
             if (
                 formOpen &&
-                form.id === material.id
+                form.id ===
+                material.id
             ) {
-                setFormOpen(false);
-                setForm(emptyForm);
+                closeForm();
             }
-        } catch (requestError: any) {
-            console.error(
-                'Ошибка изменения статуса:',
-                requestError,
-            );
-
+        } catch (
+        requestError: any
+        ) {
             setError(
-                requestError?.response?.data?.message ??
+                requestError
+                    ?.response
+                    ?.data
+                    ?.message ??
                 'Не удалось изменить статус материала.',
             );
         }
@@ -403,105 +1503,155 @@ export default function MaterialsPage() {
                         WAREHOUSE
                     </p>
 
-                    <h1>Материалы</h1>
+                    <h1>
+                        Материалы
+                    </h1>
 
                     <p>
-                        Управление материалами,
-                        остатками и минимальными
-                        значениями.
+                        Обычные материалы учитываются в штуках.
+                        ORACAL 641 — в погонных метрах.
                     </p>
                 </div>
 
-                <button
-                    type="button"
-                    onClick={openCreate}
-                    style={styles.primaryButton}
+                <div
+                    style={
+                        styles.headingActions
+                    }
                 >
-                    <Plus size={18} />
-                    Добавить материал
-                </button>
+                    <button
+                        type="button"
+                        className="button secondary"
+                        onClick={
+                            openCreateOracal
+                        }
+                    >
+                        <Palette
+                            size={17}
+                        />
+
+                        Добавить ORACAL
+                    </button>
+
+                    <button
+                        type="button"
+                        className="button primary"
+                        onClick={
+                            openCreate
+                        }
+                    >
+                        <Plus
+                            size={17}
+                        />
+
+                        Добавить материал
+                    </button>
+                </div>
             </div>
 
             <section className="stats-grid">
                 <MaterialStat
-                    icon={<Package />}
-                    value={materials.length}
-                    label="Всего материалов"
-                    tone="blue"
+                    icon={
+                        <Package />
+                    }
+                    value={
+                        materials.length
+                    }
+                    label="Всего позиций"
                 />
 
                 <MaterialStat
-                    icon={<CheckCircle2 />}
-                    value={activeMaterials}
+                    icon={
+                        <CheckCircle2 />
+                    }
+                    value={
+                        activeMaterials
+                    }
                     label="Активных"
-                    tone="green"
                 />
 
                 <MaterialStat
-                    icon={<RefreshCcw />}
-                    value={belowMinimum}
+                    icon={
+                        <RefreshCcw />
+                    }
+                    value={
+                        belowMinimum
+                    }
                     label="Требуют внимания"
-                    tone="amber"
                 />
 
                 <MaterialStat
-                    icon={<Archive />}
-                    value={withoutStock}
+                    icon={
+                        <Archive />
+                    }
+                    value={
+                        withoutStock
+                    }
                     label="Нет в наличии"
-                    tone="red"
                 />
             </section>
 
-            {error && !formOpen && (
-                <section
-                    className="panel"
-                    style={{
-                        marginBottom: 20,
-                    }}
-                >
-                    <div className="panel-header">
-                        <div>
-                            <h2>Ошибка</h2>
-                            <p>{error}</p>
-                        </div>
+            {error &&
+                !formOpen && (
+                    <div
+                        style={
+                            styles.errorBox
+                        }
+                    >
+                        {error}
                     </div>
-                </section>
-            )}
+                )}
 
             <section className="panel">
                 <div
-                    style={styles.toolbar}
+                    style={
+                        styles.toolbar
+                    }
                 >
                     <div
-                        style={styles.searchBox}
+                        style={
+                            styles.searchBox
+                        }
                     >
                         <Search
                             size={18}
-                            style={{
-                                opacity: 0.6,
-                            }}
                         />
 
                         <input
-                            value={search}
-                            onChange={(event) =>
+                            value={
+                                search
+                            }
+                            onChange={(
+                                event,
+                            ) =>
                                 setSearch(
-                                    event.target.value,
+                                    event
+                                        .target
+                                        .value,
                                 )
                             }
-                            placeholder="Поиск по названию, артикулу или категории..."
-                            style={styles.searchInput}
+                            placeholder="Поиск..."
+                            style={
+                                styles.searchInput
+                            }
                         />
                     </div>
 
                     <select
-                        value={categoryFilter}
-                        onChange={(event) =>
+                        value={
+                            categoryFilter
+                        }
+                        onChange={(
+                            event,
+                        ) =>
                             setCategoryFilter(
-                                event.target.value,
+                                event
+                                    .target
+                                    .value,
                             )
                         }
-                        style={styles.select}
+                        style={
+                            styles.select
+                        }
                     >
                         <option value="all">
                             Все категории
@@ -526,16 +1676,24 @@ export default function MaterialsPage() {
                     </select>
 
                     <select
-                        value={statusFilter}
-                        onChange={(event) =>
+                        value={
+                            statusFilter
+                        }
+                        onChange={(
+                            event,
+                        ) =>
                             setStatusFilter(
-                                event.target.value,
+                                event
+                                    .target
+                                    .value,
                             )
                         }
-                        style={styles.select}
+                        style={
+                            styles.select
+                        }
                     >
                         <option value="all">
-                            Все материалы
+                            Все статусы
                         </option>
 
                         <option value="active">
@@ -557,11 +1715,164 @@ export default function MaterialsPage() {
 
                     <button
                         type="button"
-                        onClick={loadData}
-                        style={styles.iconButton}
-                        title="Обновить"
+                        className="button secondary"
+                        onClick={
+                            loadData
+                        }
                     >
-                        <RefreshCcw size={18} />
+                        <RefreshCcw
+                            size={17}
+                        />
+
+                        Обновить
+                    </button>
+                </div>
+            </section>
+
+            <section
+                className="panel"
+                style={{
+                    marginTop:
+                        18,
+                }}
+            >
+                <div
+                    style={
+                        styles.sectionHeader
+                    }
+                >
+                    <div>
+                        <p className="eyebrow">
+                            MAIN WAREHOUSE
+                        </p>
+
+                        <h2>
+                            Обычные материалы
+                        </h2>
+
+                        <p
+                            style={
+                                styles.sectionSubtitle
+                            }
+                        >
+                            Материалы объединены по типу и разделены по ширинам.
+                        </p>
+                    </div>
+
+                    <div
+                        style={
+                            styles.groupHeaderActions
+                        }
+                    >
+                        <button
+                            type="button"
+                            className="button secondary"
+                            onClick={
+                                expandAllGroups
+                            }
+                        >
+                            Развернуть всё
+                        </button>
+
+                        <button
+                            type="button"
+                            className="button secondary"
+                            onClick={
+                                collapseAllGroups
+                            }
+                        >
+                            Свернуть всё
+                        </button>
+                    </div>
+                </div>
+
+                <div
+                    style={
+                        styles.groupsContainer
+                    }
+                >
+                    {standardGroups.map(
+                        (group) => (
+                            <StandardMaterialGroupCard
+                                key={
+                                    group.key
+                                }
+                                group={
+                                    group
+                                }
+                                expanded={
+                                    expandedGroups.has(
+                                        group.key,
+                                    )
+                                }
+                                onToggle={() =>
+                                    toggleGroup(
+                                        group.key,
+                                    )
+                                }
+                                onEdit={
+                                    openEdit
+                                }
+                            />
+                        ),
+                    )}
+
+                    {!loading &&
+                        standardGroups.length ===
+                        0 && (
+                            <div
+                                style={
+                                    styles.emptyState
+                                }
+                            >
+                                Материалы не найдены.
+                            </div>
+                        )}
+                </div>
+            </section>
+
+            <section
+                className="panel"
+                style={{
+                    marginTop:
+                        18,
+                }}
+            >
+                <div
+                    style={
+                        styles.sectionHeader
+                    }
+                >
+                    <div>
+                        <p className="eyebrow">
+                            PLOTTER MATERIAL
+                        </p>
+
+                        <h2>
+                            ORACAL 641
+                        </h2>
+
+                        <p
+                            style={
+                                styles.sectionSubtitle
+                            }
+                        >
+                            Учёт по цветам и ширинам 1,00 / 1,27 м.
+                        </p>
+                    </div>
+
+                    <button
+                        type="button"
+                        className="button primary"
+                        onClick={
+                            openCreateOracal
+                        }
+                    >
+                        <Plus
+                            size={17}
+                        />
+
+                        Добавить цвет
                     </button>
                 </div>
 
@@ -569,145 +1880,136 @@ export default function MaterialsPage() {
                     <table className="data-table">
                         <thead>
                             <tr>
-                                <th>Материал</th>
-                                <th>Артикул</th>
-                                <th>Категория</th>
-                                <th>Остаток</th>
-                                <th>Минимум</th>
-                                <th>Статус</th>
-                                <th />
+                                <th>
+                                    Цвет
+                                </th>
+
+                                <th>
+                                    Код / название
+                                </th>
+
+                                <th>
+                                    1,00 м
+                                </th>
+
+                                <th>
+                                    1,27 м
+                                </th>
+
+                                <th>
+                                    Всего
+                                </th>
                             </tr>
                         </thead>
 
                         <tbody>
-                            {loading && (
-                                <tr>
-                                    <td colSpan={7}>
-                                        Загрузка
-                                        материалов...
-                                    </td>
-                                </tr>
-                            )}
+                            {oracalRows.map(
+                                (row) => {
+                                    const total =
+                                        (
+                                            row.width100
+                                                ?.currentQuantity ??
+                                            0
+                                        ) +
+                                        (
+                                            row.width127
+                                                ?.currentQuantity ??
+                                            0
+                                        );
 
-                            {!loading &&
-                                filteredMaterials.length ===
-                                0 && (
-                                    <tr>
-                                        <td colSpan={7}>
-                                            Материалы не
-                                            найдены.
-                                        </td>
-                                    </tr>
-                                )}
-
-                            {!loading &&
-                                filteredMaterials.map(
-                                    (material) => (
+                                    return (
                                         <tr
                                             key={
-                                                material.id
+                                                row.code
                                             }
                                         >
-                                            <td className="primary-cell">
-                                                {
-                                                    material.name
-                                                }
-                                            </td>
-
                                             <td>
-                                                {
-                                                    material.article
-                                                }
-                                            </td>
+                                                <div
+                                                    style={{
+                                                        ...styles.colorSwatch,
 
-                                            <td>
-                                                {categoryMap.get(
-                                                    material.categoryId,
-                                                ) ??
-                                                    'Без категории'}
+                                                        background:
+                                                            row.hex,
+                                                    }}
+                                                />
                                             </td>
 
                                             <td>
                                                 <strong>
-                                                    {formatQuantity(
-                                                        material.currentQuantity,
-                                                        material.unit,
-                                                    )}
+                                                    {
+                                                        row.code
+                                                    }
                                                 </strong>
+
+                                                {' '}
+
+                                                {
+                                                    row.name
+                                                }
                                             </td>
 
                                             <td>
-                                                {formatQuantity(
-                                                    material.minimumQuantity,
-                                                    material.unit,
-                                                )}
-                                            </td>
-
-                                            <td>
-                                                <MaterialStatus
+                                                <OracalQuantityCell
                                                     material={
-                                                        material
+                                                        row.width100
+                                                    }
+                                                    onEdit={
+                                                        openEdit
                                                     }
                                                 />
                                             </td>
 
                                             <td>
-                                                <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                        openEdit(
-                                                            material,
-                                                        )
+                                                <OracalQuantityCell
+                                                    material={
+                                                        row.width127
                                                     }
-                                                    style={
-                                                        styles.tableButton
+                                                    onEdit={
+                                                        openEdit
                                                     }
-                                                    title="Редактировать"
-                                                >
-                                                    <Edit3
-                                                        size={
-                                                            17
-                                                        }
-                                                    />
-                                                </button>
+                                                />
+                                            </td>
+
+                                            <td>
+                                                <strong>
+                                                    {numberFormatter.format(
+                                                        total,
+                                                    )}{' '}
+                                                    м
+                                                </strong>
                                             </td>
                                         </tr>
-                                    ),
+                                    );
+                                },
+                            )}
+
+                            {!loading &&
+                                oracalRows.length ===
+                                0 && (
+                                    <tr>
+                                        <td colSpan={5}>
+                                            ORACAL пока не добавлен.
+                                        </td>
+                                    </tr>
                                 )}
                         </tbody>
                     </table>
-                </div>
-
-                <div
-                    style={styles.tableFooter}
-                >
-                    Показано:{' '}
-                    <strong>
-                        {
-                            filteredMaterials.length
-                        }
-                    </strong>{' '}
-                    из{' '}
-                    <strong>
-                        {materials.length}
-                    </strong>
                 </div>
             </section>
 
             {formOpen && (
                 <div
-                    style={styles.overlay}
-                    onMouseDown={(event) => {
-                        if (
-                            event.target ===
-                            event.currentTarget
-                        ) {
-                            closeForm();
-                        }
-                    }}
+                    style={
+                        styles.overlay
+                    }
                 >
-                    <section
-                        style={styles.modal}
+                    <form
+                        onSubmit={
+                            handleSubmit
+                        }
+                        style={
+                            styles.modal
+                        }
                     >
                         <div
                             style={
@@ -716,431 +2018,941 @@ export default function MaterialsPage() {
                         >
                             <div>
                                 <p className="eyebrow">
-                                    MATERIAL
+                                    {form.kind ===
+                                        'Oracal641'
+                                        ? 'ORACAL 641'
+                                        : 'MATERIAL'}
                                 </p>
 
-                                <h2
-                                    style={{
-                                        margin: 0,
-                                    }}
-                                >
+                                <h2>
                                     {editing
-                                        ? 'Редактирование материала'
-                                        : 'Новый материал'}
+                                        ? 'Редактирование'
+                                        : form.kind ===
+                                            'Oracal641'
+                                            ? 'Добавить ORACAL'
+                                            : 'Новая группа материалов'}
                                 </h2>
                             </div>
 
                             <button
                                 type="button"
+                                style={
+                                    styles.closeButton
+                                }
                                 onClick={
                                     closeForm
                                 }
-                                style={
-                                    styles.iconButton
-                                }
                             >
-                                <X size={20} />
+                                <X
+                                    size={20}
+                                />
                             </button>
                         </div>
 
-                        <form
-                            onSubmit={
-                                handleSubmit
-                            }
-                        >
+                        {error && (
                             <div
                                 style={
-                                    styles.formGrid
+                                    styles.errorBox
                                 }
                             >
-                                <FormField
-                                    label="Название"
+                                {error}
+                            </div>
+                        )}
+
+                        {!editing && (
+                            <div
+                                style={
+                                    styles.kindSelector
+                                }
+                            >
+                                <button
+                                    type="button"
+                                    style={{
+                                        ...styles.kindButton,
+
+                                        ...(form.kind ===
+                                            'Standard'
+                                            ? styles.kindButtonActive
+                                            : {}),
+                                    }}
+                                    onClick={() => {
+                                        setForm(
+                                            (current) => ({
+                                                ...current,
+                                                kind:
+                                                    'Standard',
+                                            }),
+                                        );
+
+                                        applyPreset(
+                                            'banner',
+                                        );
+                                    }}
+                                >
+                                    <Package
+                                        size={18}
+                                    />
+
+                                    Обычный материал
+                                </button>
+
+                                <button
+                                    type="button"
+                                    style={{
+                                        ...styles.kindButton,
+
+                                        ...(form.kind ===
+                                            'Oracal641'
+                                            ? styles.kindButtonActive
+                                            : {}),
+                                    }}
+                                    onClick={() => {
+                                        const first =
+                                            oracalPalette[0];
+
+                                        setForm(
+                                            (current) => ({
+                                                ...current,
+
+                                                kind:
+                                                    'Oracal641',
+
+                                                widthMeters:
+                                                    '1',
+
+                                                colorCode:
+                                                    first.code,
+
+                                                colorName:
+                                                    first.name,
+
+                                                colorHex:
+                                                    first.hex,
+                                            }),
+                                        );
+                                    }}
+                                >
+                                    <Palette
+                                        size={18}
+                                    />
+
+                                    ORACAL 641
+                                </button>
+                            </div>
+                        )}
+
+                        <div
+                            style={
+                                styles.formGrid
+                            }
+                        >
+                            <label
+                                style={
+                                    styles.field
+                                }
+                            >
+                                <span>
+                                    Категория
+                                </span>
+
+                                <select
                                     value={
-                                        form.name
+                                        form.categoryId
                                     }
                                     onChange={(
-                                        value,
+                                        event,
                                     ) =>
                                         setForm(
-                                            (
-                                                current,
-                                            ) => ({
+                                            (current) => ({
                                                 ...current,
-                                                name: value,
-                                            }),
-                                        )
-                                    }
-                                    placeholder="Например: Пленка Oracal 641"
-                                />
 
-                                <FormField
-                                    label="Артикул"
-                                    value={
-                                        form.article
-                                    }
-                                    onChange={(
-                                        value,
-                                    ) =>
-                                        setForm(
-                                            (
-                                                current,
-                                            ) => ({
-                                                ...current,
-                                                article:
-                                                    value,
-                                            }),
-                                        )
-                                    }
-                                    placeholder="ORACAL-641-WHITE"
-                                />
-
-                                <label
-                                    style={
-                                        styles.field
-                                    }
-                                >
-                                    <span>
-                                        Категория
-                                    </span>
-
-                                    <select
-                                        value={
-                                            form.categoryId
-                                        }
-                                        onChange={(
-                                            event,
-                                        ) =>
-                                            setForm(
-                                                (
-                                                    current,
-                                                ) => ({
-                                                    ...current,
-                                                    categoryId:
-                                                        event
-                                                            .target
-                                                            .value,
-                                                }),
-                                            )
-                                        }
-                                        style={
-                                            styles.input
-                                        }
-                                        required
-                                    >
-                                        <option value="">
-                                            Выберите
-                                            категорию
-                                        </option>
-
-                                        {categories
-                                            .filter(
-                                                (
-                                                    category,
-                                                ) =>
-                                                    category.isActive ||
-                                                    category.id ===
-                                                    form.categoryId,
-                                            )
-                                            .map(
-                                                (
-                                                    category,
-                                                ) => (
-                                                    <option
-                                                        key={
-                                                            category.id
-                                                        }
-                                                        value={
-                                                            category.id
-                                                        }
-                                                    >
-                                                        {
-                                                            category.name
-                                                        }
-                                                    </option>
-                                                ),
-                                            )}
-                                    </select>
-                                </label>
-
-                                <label
-                                    style={
-                                        styles.field
-                                    }
-                                >
-                                    <span>
-                                        Единица
-                                        измерения
-                                    </span>
-
-                                    <select
-                                        value={
-                                            form.unit
-                                        }
-                                        onChange={(
-                                            event,
-                                        ) =>
-                                            setForm(
-                                                (
-                                                    current,
-                                                ) => ({
-                                                    ...current,
-                                                    unit: event
+                                                categoryId:
+                                                    event
                                                         .target
                                                         .value,
-                                                }),
-                                            )
-                                        }
-                                        style={
-                                            styles.input
-                                        }
-                                    >
-                                        <option value="Piece">
-                                            Штуки
-                                        </option>
-
-                                        <option value="Meter">
-                                            Метры
-                                        </option>
-
-                                        <option value="SquareMeter">
-                                            Квадратные
-                                            метры
-                                        </option>
-
-                                        <option value="Kilogram">
-                                            Килограммы
-                                        </option>
-
-                                        <option value="Liter">
-                                            Литры
-                                        </option>
-
-                                        <option value="Roll">
-                                            Рулоны
-                                        </option>
-
-                                        <option value="Sheet">
-                                            Листы
-                                        </option>
-                                    </select>
-                                </label>
-
-                                <label
+                                            }),
+                                        )
+                                    }
                                     style={
-                                        styles.field
+                                        styles.input
                                     }
                                 >
-                                    <span>
-                                        Минимальный
-                                        остаток
-                                    </span>
+                                    <option value="">
+                                        Выберите категорию
+                                    </option>
 
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={
-                                            form.minimumQuantity
-                                        }
-                                        onChange={(
-                                            event,
-                                        ) =>
-                                            setForm(
-                                                (
-                                                    current,
-                                                ) => ({
-                                                    ...current,
-                                                    minimumQuantity:
-                                                        event
-                                                            .target
-                                                            .value,
-                                                }),
-                                            )
-                                        }
-                                        style={
-                                            styles.input
-                                        }
-                                    />
-                                </label>
+                                    {categories
+                                        .filter(
+                                            (category) =>
+                                                category.isActive,
+                                        )
+                                        .map(
+                                            (category) => (
+                                                <option
+                                                    key={
+                                                        category.id
+                                                    }
+                                                    value={
+                                                        category.id
+                                                    }
+                                                >
+                                                    {
+                                                        category.name
+                                                    }
+                                                </option>
+                                            ),
+                                        )}
+                                </select>
+                            </label>
 
-                                {editing && (
+                            {form.kind ===
+                                'Standard' ? (
+                                <>
                                     <label
                                         style={
                                             styles.field
                                         }
                                     >
                                         <span>
-                                            Текущий
-                                            остаток
+                                            Название группы
                                         </span>
 
-                                        <div
+                                        <input
+                                            value={
+                                                form.name
+                                            }
+                                            onChange={(
+                                                event,
+                                            ) =>
+                                                setForm(
+                                                    (current) => ({
+                                                        ...current,
+
+                                                        name:
+                                                            event
+                                                                .target
+                                                                .value,
+                                                    }),
+                                                )
+                                            }
+                                            placeholder="Баннер 510 г"
                                             style={
-                                                styles.readOnlyValue
+                                                styles.input
+                                            }
+                                        />
+                                    </label>
+
+                                    {editing ? (
+                                        <>
+                                            <label
+                                                style={
+                                                    styles.field
+                                                }
+                                            >
+                                                <span>
+                                                    Артикул
+                                                </span>
+
+                                                <input
+                                                    value={
+                                                        form.article
+                                                    }
+                                                    onChange={(
+                                                        event,
+                                                    ) =>
+                                                        setForm(
+                                                            (current) => ({
+                                                                ...current,
+
+                                                                article:
+                                                                    event
+                                                                        .target
+                                                                        .value,
+                                                            }),
+                                                        )
+                                                    }
+                                                    style={
+                                                        styles.input
+                                                    }
+                                                />
+                                            </label>
+
+                                            <label
+                                                style={
+                                                    styles.field
+                                                }
+                                            >
+                                                <span>
+                                                    Ширина, м
+                                                </span>
+
+                                                <input
+                                                    value={
+                                                        form.widthMeters
+                                                    }
+                                                    onChange={(
+                                                        event,
+                                                    ) =>
+                                                        setForm(
+                                                            (current) => ({
+                                                                ...current,
+
+                                                                widthMeters:
+                                                                    event
+                                                                        .target
+                                                                        .value,
+                                                            }),
+                                                        )
+                                                    }
+                                                    style={
+                                                        styles.input
+                                                    }
+                                                />
+                                            </label>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <label
+                                                style={
+                                                    styles.field
+                                                }
+                                            >
+                                                <span>
+                                                    Префикс артикула
+                                                </span>
+
+                                                <input
+                                                    value={
+                                                        form.articlePrefix
+                                                    }
+                                                    onChange={(
+                                                        event,
+                                                    ) =>
+                                                        setForm(
+                                                            (current) => ({
+                                                                ...current,
+
+                                                                articlePrefix:
+                                                                    event
+                                                                        .target
+                                                                        .value
+                                                                        .toUpperCase(),
+                                                            }),
+                                                        )
+                                                    }
+                                                    placeholder="BANNER-510"
+                                                    style={
+                                                        styles.input
+                                                    }
+                                                />
+
+                                                <small
+                                                    style={
+                                                        styles.helper
+                                                    }
+                                                >
+                                                    Ширина будет добавлена автоматически.
+                                                </small>
+                                            </label>
+
+                                            <div
+                                                style={
+                                                    styles.fullWidth
+                                                }
+                                            >
+                                                <span
+                                                    style={
+                                                        styles.fieldTitle
+                                                    }
+                                                >
+                                                    Набор ширин
+                                                </span>
+
+                                                <div
+                                                    style={
+                                                        styles.presetRow
+                                                    }
+                                                >
+                                                    {widthPresets.map(
+                                                        (preset) => (
+                                                            <button
+                                                                key={
+                                                                    preset.id
+                                                                }
+                                                                type="button"
+                                                                style={{
+                                                                    ...styles.presetButton,
+
+                                                                    ...(selectedPreset ===
+                                                                        preset.id
+                                                                        ? styles.presetButtonActive
+                                                                        : {}),
+                                                                }}
+                                                                onClick={() =>
+                                                                    applyPreset(
+                                                                        preset.id,
+                                                                    )
+                                                                }
+                                                            >
+                                                                {
+                                                                    preset.name
+                                                                }
+                                                            </button>
+                                                        ),
+                                                    )}
+
+                                                    <button
+                                                        type="button"
+                                                        style={{
+                                                            ...styles.presetButton,
+
+                                                            ...(selectedPreset ===
+                                                                'custom'
+                                                                ? styles.presetButtonActive
+                                                                : {}),
+                                                        }}
+                                                        onClick={() =>
+                                                            setSelectedPreset(
+                                                                'custom',
+                                                            )
+                                                        }
+                                                    >
+                                                        Свои ширины
+                                                    </button>
+                                                </div>
+
+                                                <div
+                                                    style={
+                                                        styles.widthSelector
+                                                    }
+                                                >
+                                                    {selectedWidths.map(
+                                                        (width) => (
+                                                            <button
+                                                                key={
+                                                                    width
+                                                                }
+                                                                type="button"
+                                                                style={
+                                                                    styles.widthChip
+                                                                }
+                                                                onClick={() =>
+                                                                    toggleWidth(
+                                                                        width,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <Check
+                                                                    size={
+                                                                        14
+                                                                    }
+                                                                />
+
+                                                                {formatWidth(
+                                                                    width,
+                                                                )}
+                                                            </button>
+                                                        ),
+                                                    )}
+                                                </div>
+
+                                                <div
+                                                    style={
+                                                        styles.customWidthRow
+                                                    }
+                                                >
+                                                    <input
+                                                        value={
+                                                            customWidth
+                                                        }
+                                                        onChange={(
+                                                            event,
+                                                        ) =>
+                                                            setCustomWidth(
+                                                                event
+                                                                    .target
+                                                                    .value,
+                                                            )
+                                                        }
+                                                        placeholder="Своя ширина, например 1,45"
+                                                        style={
+                                                            styles.input
+                                                        }
+                                                    />
+
+                                                    <button
+                                                        type="button"
+                                                        className="button secondary"
+                                                        onClick={
+                                                            addCustomWidth
+                                                        }
+                                                    >
+                                                        <Plus
+                                                            size={
+                                                                16
+                                                            }
+                                                        />
+
+                                                        Добавить
+                                                    </button>
+                                                </div>
+
+                                                {selectedWidths.length >
+                                                    0 && (
+                                                        <div
+                                                            style={
+                                                                styles.articlePreview
+                                                            }
+                                                        >
+                                                            <div
+                                                                style={
+                                                                    styles.previewTitle
+                                                                }
+                                                            >
+                                                                Будут созданы:
+                                                            </div>
+
+                                                            {selectedWidths.map(
+                                                                (width) => (
+                                                                    <div
+                                                                        key={
+                                                                            width
+                                                                        }
+                                                                        style={
+                                                                            styles.previewRow
+                                                                        }
+                                                                    >
+                                                                        <span>
+                                                                            {form.name ||
+                                                                                'Материал'}
+                                                                        </span>
+
+                                                                        <strong>
+                                                                            {form.articlePrefix ||
+                                                                                'PREFIX'}
+                                                                            -
+                                                                            {widthToCode(
+                                                                                width,
+                                                                            )}
+                                                                        </strong>
+                                                                    </div>
+                                                                ),
+                                                            )}
+                                                        </div>
+                                                    )}
+                                            </div>
+                                        </>
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    <label
+                                        style={
+                                            styles.field
+                                        }
+                                    >
+                                        <span>
+                                            Цвет
+                                        </span>
+
+                                        <select
+                                            value={
+                                                form.colorCode
+                                            }
+                                            onChange={(
+                                                event,
+                                            ) =>
+                                                selectOracalColor(
+                                                    event
+                                                        .target
+                                                        .value,
+                                                )
+                                            }
+                                            style={
+                                                styles.input
                                             }
                                         >
-                                            {formatQuantity(
-                                                form.currentQuantity,
-                                                form.unit,
+                                            {oracalPalette.map(
+                                                (color) => (
+                                                    <option
+                                                        key={
+                                                            color.code
+                                                        }
+                                                        value={
+                                                            color.code
+                                                        }
+                                                    >
+                                                        {
+                                                            color.code
+                                                        }{' '}
+                                                        —{' '}
+                                                        {
+                                                            color.name
+                                                        }
+                                                    </option>
+                                                ),
                                             )}
-
-                                            <small>
-                                                Изменяется
-                                                через
-                                                приход,
-                                                расход или
-                                                инвентаризацию
-                                            </small>
-                                        </div>
+                                        </select>
                                     </label>
-                                )}
-                            </div>
 
-                            {error && (
-                                <div
-                                    style={
-                                        styles.formError
+                                    <div
+                                        style={
+                                            styles.colorPreview
+                                        }
+                                    >
+                                        <div
+                                            style={{
+                                                ...styles.largeColorSwatch,
+
+                                                background:
+                                                    form.colorHex,
+                                            }}
+                                        />
+
+                                        <strong>
+                                            {
+                                                form.colorCode
+                                            }{' '}
+                                            {
+                                                form.colorName
+                                            }
+                                        </strong>
+                                    </div>
+
+                                    <label
+                                        style={
+                                            styles.field
+                                        }
+                                    >
+                                        <span>
+                                            Ширина
+                                        </span>
+
+                                        <select
+                                            value={
+                                                form.widthMeters
+                                            }
+                                            onChange={(
+                                                event,
+                                            ) =>
+                                                setForm(
+                                                    (current) => ({
+                                                        ...current,
+
+                                                        widthMeters:
+                                                            event
+                                                                .target
+                                                                .value,
+                                                    }),
+                                                )
+                                            }
+                                            style={
+                                                styles.input
+                                            }
+                                        >
+                                            <option value="1">
+                                                1,00 м
+                                            </option>
+
+                                            <option value="1.27">
+                                                1,27 м
+                                            </option>
+                                        </select>
+                                    </label>
+                                </>
+                            )}
+
+                            <label
+                                style={
+                                    styles.field
+                                }
+                            >
+                                <span>
+                                    Минимальный остаток
+                                </span>
+
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step={
+                                        form.kind ===
+                                            'Oracal641'
+                                            ? '0.1'
+                                            : '1'
                                     }
+                                    value={
+                                        form.minimumQuantity
+                                    }
+                                    onChange={(
+                                        event,
+                                    ) =>
+                                        setForm(
+                                            (current) => ({
+                                                ...current,
+
+                                                minimumQuantity:
+                                                    event
+                                                        .target
+                                                        .value,
+                                            }),
+                                        )
+                                    }
+                                    style={
+                                        styles.input
+                                    }
+                                />
+                            </label>
+                        </div>
+
+                        <div
+                            style={
+                                styles.modalFooter
+                            }
+                        >
+                            {editing && (
+                                <button
+                                    type="button"
+                                    className="button secondary"
+                                    onClick={() => {
+                                        const material =
+                                            materials.find(
+                                                (item) =>
+                                                    item.id ===
+                                                    form.id,
+                                            );
+
+                                        if (
+                                            material
+                                        ) {
+                                            changeActivity(
+                                                material,
+                                            );
+                                        }
+                                    }}
                                 >
-                                    {error}
-                                </div>
+                                    {form.isActive
+                                        ? 'В архив'
+                                        : 'Восстановить'}
+                                </button>
                             )}
 
                             <div
-                                style={
-                                    styles.modalFooter
+                                style={{
+                                    flex:
+                                        1,
+                                }}
+                            />
+
+                            <button
+                                type="button"
+                                className="button secondary"
+                                onClick={
+                                    closeForm
                                 }
                             >
-                                <div>
-                                    {editing && (
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                const material =
-                                                    materials.find(
-                                                        (
-                                                            item,
-                                                        ) =>
-                                                            item.id ===
-                                                            form.id,
-                                                    );
+                                Отмена
+                            </button>
 
-                                                if (
-                                                    material
-                                                ) {
-                                                    changeActivity(
-                                                        material,
-                                                    );
-                                                }
-                                            }}
-                                            style={
-                                                form.isActive
-                                                    ? styles.archiveButton
-                                                    : styles.restoreButton
-                                            }
-                                        >
-                                            {form.isActive ? (
-                                                <>
-                                                    <Archive
-                                                        size={
-                                                            17
-                                                        }
-                                                    />
-                                                    Архивировать
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <RotateCcw
-                                                        size={
-                                                            17
-                                                        }
-                                                    />
-                                                    Восстановить
-                                                </>
-                                            )}
-                                        </button>
-                                    )}
-                                </div>
-
-                                <div
-                                    style={
-                                        styles.footerActions
-                                    }
-                                >
-                                    <button
-                                        type="button"
-                                        onClick={
-                                            closeForm
-                                        }
-                                        style={
-                                            styles.secondaryButton
-                                        }
-                                    >
-                                        Отмена
-                                    </button>
-
-                                    <button
-                                        type="submit"
-                                        disabled={
-                                            saving
-                                        }
-                                        style={
-                                            styles.primaryButton
-                                        }
-                                    >
-                                        {saving
-                                            ? 'Сохранение...'
-                                            : editing
-                                                ? 'Сохранить'
-                                                : 'Создать'}
-                                    </button>
-                                </div>
-                            </div>
-                        </form>
-                    </section>
+                            <button
+                                type="submit"
+                                className="button primary"
+                                disabled={
+                                    saving
+                                }
+                            >
+                                {saving
+                                    ? 'Сохранение...'
+                                    : !editing &&
+                                        form.kind ===
+                                        'Standard'
+                                        ? `Создать ${selectedWidths.length} позиций`
+                                        : editing
+                                            ? 'Сохранить'
+                                            : 'Добавить'}
+                            </button>
+                        </div>
+                    </form>
                 </div>
             )}
         </div>
     );
 }
 
-function MaterialStatus({
-    material,
+function StandardMaterialGroupCard({
+    group,
+    expanded,
+    onToggle,
+    onEdit,
 }: {
-    material: MaterialCatalogItem;
+    group: StandardMaterialGroup;
+    expanded: boolean;
+    onToggle: () => void;
+    onEdit: (
+        material: MaterialCatalogItem,
+    ) => void;
 }) {
-    if (!material.isActive) {
-        return (
-            <span className="status status-info">
-                <span className="status-dot" />
-                Архив
-            </span>
-        );
-    }
+    return (
+        <div
+            style={
+                styles.groupCard
+            }
+        >
+            <button
+                type="button"
+                style={
+                    styles.groupSummary
+                }
+                onClick={
+                    onToggle
+                }
+            >
+                {expanded ? (
+                    <ChevronDown
+                        size={20}
+                    />
+                ) : (
+                    <ChevronRight
+                        size={20}
+                    />
+                )}
 
-    if (material.currentQuantity <= 0) {
-        return (
-            <span className="status status-danger">
-                <span className="status-dot" />
-                Нет в наличии
-            </span>
-        );
-    }
+                <div
+                    style={{
+                        flex:
+                            1,
+                    }}
+                >
+                    <strong>
+                        {
+                            group.name
+                        }
+                    </strong>
 
-    if (material.belowMinimum) {
-        return (
-            <span className="status status-warning">
-                <span className="status-dot" />
-                Низкий остаток
-            </span>
-        );
+                    <div
+                        style={
+                            styles.helper
+                        }
+                    >
+                        {
+                            group.categoryName
+                        }{' '}
+                        ·{' '}
+                        {
+                            group.materials.length
+                        }{' '}
+                        ширин
+                    </div>
+                </div>
+
+                <strong>
+                    {numberFormatter.format(
+                        group.totalQuantity,
+                    )}{' '}
+                    шт.
+                </strong>
+            </button>
+
+            {expanded && (
+                <div
+                    style={
+                        styles.widthGrid
+                    }
+                >
+                    {group.materials.map(
+                        (material) => (
+                            <div
+                                key={
+                                    material.id
+                                }
+                                style={
+                                    styles.widthCard
+                                }
+                            >
+                                <div>
+                                    <strong
+                                        style={
+                                            styles.widthValue
+                                        }
+                                    >
+                                        {material.widthMeters
+                                            ? formatWidth(
+                                                material.widthMeters,
+                                            )
+                                            : 'Без ширины'}
+                                    </strong>
+
+                                    <div
+                                        style={
+                                            styles.helper
+                                        }
+                                    >
+                                        {
+                                            material.article
+                                        }
+                                    </div>
+                                </div>
+
+                                <div>
+                                    {numberFormatter.format(
+                                        material.currentQuantity,
+                                    )}{' '}
+                                    шт.
+                                </div>
+
+                                <button
+                                    type="button"
+                                    style={
+                                        styles.iconButton
+                                    }
+                                    onClick={() =>
+                                        onEdit(
+                                            material,
+                                        )
+                                    }
+                                >
+                                    <Edit3
+                                        size={16}
+                                    />
+                                </button>
+                            </div>
+                        ),
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function OracalQuantityCell({
+    material,
+    onEdit,
+}: {
+    material?: MaterialCatalogItem;
+    onEdit: (
+        material: MaterialCatalogItem,
+    ) => void;
+}) {
+    if (!material) {
+        return <>—</>;
     }
 
     return (
-        <span className="status status-success">
-            <span className="status-dot" />
-            В норме
-        </span>
+        <button
+            type="button"
+            style={
+                styles.quantityButton
+            }
+            onClick={() =>
+                onEdit(
+                    material,
+                )
+            }
+        >
+            {numberFormatter.format(
+                material.currentQuantity,
+            )}{' '}
+            м
+        </button>
     );
 }
 
@@ -1148,334 +2960,603 @@ function MaterialStat({
     icon,
     value,
     label,
-    tone,
 }: {
     icon: React.ReactNode;
     value: number;
     label: string;
-    tone: string;
 }) {
     return (
-        <article
-            className={`stat-card stat-${tone}`}
-        >
+        <article className="stat-card">
             <div className="stat-icon">
                 {icon}
             </div>
 
             <div>
-                <strong className="stat-value">
-                    {value}
-                </strong>
-
-                <span className="stat-label">
+                <div className="stat-label">
                     {label}
-                </span>
+                </div>
 
-                <small>
-                    Данные каталога
-                </small>
+                <div className="stat-value">
+                    {value}
+                </div>
             </div>
         </article>
     );
 }
 
-function FormField({
-    label,
-    value,
-    onChange,
-    placeholder,
-}: {
-    label: string;
-    value: string;
-    onChange: (value: string) => void;
-    placeholder?: string;
-}) {
-    return (
-        <label style={styles.field}>
-            <span>{label}</span>
+function normalizeMaterialGroupName(
+    name: string,
+) {
+    return name
+        .replace(
+            /\s+\d+[.,]\d+\s*м\s*$/i,
+            '',
+        )
+        .trim();
+}
 
-            <input
-                value={value}
-                onChange={(event) =>
-                    onChange(
-                        event.target.value,
-                    )
-                }
-                placeholder={placeholder}
-                style={styles.input}
-                required
-            />
-        </label>
+function widthToCode(
+    width: number,
+) {
+    return Math.round(
+        width * 100,
     );
 }
 
-function formatQuantity(
-    quantity: number,
-    unit: string,
+function formatWidth(
+    value: number,
 ) {
-    return `${numberFormatter.format(
-        quantity,
-    )} ${getUnitLabel(unit)}`;
-}
+    return `${value.toLocaleString(
+        'ru-RU',
+        {
+            minimumFractionDigits:
+                2,
 
-function getUnitLabel(unit: string) {
-    switch (unit) {
-        case 'Piece':
-            return 'шт.';
-
-        case 'Meter':
-            return 'м';
-
-        case 'SquareMeter':
-            return 'м²';
-
-        case 'Kilogram':
-            return 'кг';
-
-        case 'Liter':
-            return 'л';
-
-        case 'Roll':
-            return 'рул.';
-
-        case 'Sheet':
-            return 'лист.';
-
-        default:
-            return unit;
-    }
+            maximumFractionDigits:
+                2,
+        },
+    )} м`;
 }
 
 const styles: Record<
     string,
-    React.CSSProperties
+    CSSProperties
 > = {
+    headingActions: {
+        display:
+            'flex',
+        gap:
+            10,
+    },
+
     toolbar: {
-        display: 'flex',
-        gap: 12,
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        marginBottom: 18,
+        display:
+            'flex',
+        gap:
+            10,
+        padding:
+            16,
+        flexWrap:
+            'wrap',
     },
 
     searchBox: {
-        flex: '1 1 340px',
-        minWidth: 220,
-        height: 44,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        padding: '0 14px',
-        border: '1px solid rgba(148, 163, 184, 0.14)',
-        borderRadius: 12,
-        background: 'rgba(15, 23, 42, 0.55)',
+        flex:
+            1,
+        display:
+            'flex',
+        alignItems:
+            'center',
+        gap:
+            10,
+        border:
+            '1px solid #283341',
+        borderRadius:
+            10,
+        padding:
+            '0 12px',
+        background:
+            '#111922',
     },
 
     searchInput: {
-        width: '100%',
-        border: 0,
-        outline: 0,
-        background: 'transparent',
-        color: 'inherit',
-        font: 'inherit',
+        flex:
+            1,
+        border:
+            0,
+        outline:
+            0,
+        background:
+            'transparent',
+        color:
+            '#fff',
+        minHeight:
+            40,
     },
 
     select: {
-        height: 44,
-        padding: '0 12px',
-        borderRadius: 12,
-        border: '1px solid rgba(148, 163, 184, 0.14)',
-        background: '#111827',
-        color: '#e5e7eb',
-        minWidth: 170,
+        border:
+            '1px solid #283341',
+        borderRadius:
+            10,
+        background:
+            '#111922',
+        color:
+            '#fff',
+        padding:
+            '0 12px',
     },
 
-    primaryButton: {
-        minHeight: 42,
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        padding: '0 16px',
-        border: 0,
-        borderRadius: 11,
-        background: '#2563eb',
-        color: '#ffffff',
-        fontWeight: 700,
-        cursor: 'pointer',
+    sectionHeader: {
+        display:
+            'flex',
+        justifyContent:
+            'space-between',
+        gap:
+            16,
+        alignItems:
+            'center',
+        padding:
+            18,
+        borderBottom:
+            '1px solid rgba(255,255,255,.06)',
     },
 
-    secondaryButton: {
-        minHeight: 42,
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '0 16px',
-        borderRadius: 11,
-        border: '1px solid rgba(148, 163, 184, 0.18)',
-        background: 'rgba(30, 41, 59, 0.65)',
-        color: '#e5e7eb',
-        cursor: 'pointer',
+    groupHeaderActions: {
+        display:
+            'flex',
+        gap:
+            8,
+    },
+
+    sectionSubtitle: {
+        color:
+            '#7f8d9d',
+        fontSize:
+            12,
+    },
+
+    groupsContainer: {
+        display:
+            'grid',
+        gap:
+            10,
+        padding:
+            14,
+    },
+
+    groupCard: {
+        border:
+            '1px solid #26313d',
+        borderRadius:
+            12,
+        overflow:
+            'hidden',
+    },
+
+    groupSummary: {
+        width:
+            '100%',
+        display:
+            'flex',
+        gap:
+            12,
+        alignItems:
+            'center',
+        padding:
+            15,
+        border:
+            0,
+        background:
+            '#10171f',
+        color:
+            '#fff',
+        cursor:
+            'pointer',
+        textAlign:
+            'left',
+    },
+
+    widthGrid: {
+        display:
+            'grid',
+        gridTemplateColumns:
+            'repeat(auto-fit, minmax(210px, 1fr))',
+        gap:
+            10,
+        padding:
+            12,
+    },
+
+    widthCard: {
+        display:
+            'flex',
+        alignItems:
+            'center',
+        justifyContent:
+            'space-between',
+        gap:
+            10,
+        padding:
+            12,
+        borderRadius:
+            10,
+        background:
+            '#141d27',
+        border:
+            '1px solid #293542',
+    },
+
+    widthValue: {
+        fontSize:
+            18,
+    },
+
+    colorSwatch: {
+        width:
+            30,
+        height:
+            30,
+        borderRadius:
+            7,
+        border:
+            '1px solid rgba(255,255,255,.25)',
+    },
+
+    largeColorSwatch: {
+        width:
+            50,
+        height:
+            50,
+        borderRadius:
+            10,
+        border:
+            '1px solid rgba(255,255,255,.25)',
+    },
+
+    quantityButton: {
+        border:
+            '1px solid #293542',
+        background:
+            '#141d27',
+        color:
+            '#fff',
+        borderRadius:
+            8,
+        padding:
+            '7px 10px',
+        cursor:
+            'pointer',
     },
 
     iconButton: {
-        width: 42,
-        height: 42,
-        borderRadius: 11,
-        border: '1px solid rgba(148, 163, 184, 0.16)',
-        background: 'rgba(30, 41, 59, 0.65)',
-        color: '#cbd5e1',
-        display: 'inline-flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        cursor: 'pointer',
-    },
-
-    tableButton: {
-        width: 36,
-        height: 36,
-        borderRadius: 9,
-        border: '1px solid rgba(148, 163, 184, 0.12)',
-        background: 'rgba(30, 41, 59, 0.6)',
-        color: '#cbd5e1',
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        cursor: 'pointer',
-    },
-
-    tableFooter: {
-        paddingTop: 16,
-        fontSize: 13,
-        color: '#94a3b8',
+        width:
+            34,
+        height:
+            34,
+        display:
+            'grid',
+        placeItems:
+            'center',
+        border:
+            '1px solid #293542',
+        background:
+            '#141d27',
+        color:
+            '#fff',
+        borderRadius:
+            8,
+        cursor:
+            'pointer',
     },
 
     overlay: {
-        position: 'fixed',
-        inset: 0,
-        zIndex: 1000,
-        background: 'rgba(2, 6, 23, 0.78)',
-        backdropFilter: 'blur(5px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 24,
+        position:
+            'fixed',
+        inset:
+            0,
+        display:
+            'grid',
+        placeItems:
+            'center',
+        background:
+            'rgba(0,0,0,.75)',
+        zIndex:
+            1000,
+        padding:
+            20,
     },
 
     modal: {
-        width: 'min(760px, 100%)',
-        maxHeight: '90vh',
-        overflowY: 'auto',
-        background: '#0f172a',
-        border: '1px solid rgba(148, 163, 184, 0.16)',
-        borderRadius: 18,
-        boxShadow:
-            '0 30px 90px rgba(0,0,0,0.45)',
-        padding: 24,
+        width:
+            'min(780px, 96vw)',
+        maxHeight:
+            '92vh',
+        overflowY:
+            'auto',
+        background:
+            '#111a2a',
+        border:
+            '1px solid #273446',
+        borderRadius:
+            18,
+        padding:
+            24,
     },
 
     modalHeader: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        gap: 20,
-        marginBottom: 24,
+        display:
+            'flex',
+        justifyContent:
+            'space-between',
+        alignItems:
+            'center',
+        marginBottom:
+            20,
+    },
+
+    closeButton: {
+        width:
+            40,
+        height:
+            40,
+        display:
+            'grid',
+        placeItems:
+            'center',
+        border:
+            0,
+        borderRadius:
+            10,
+        background:
+            '#1b2532',
+        color:
+            '#fff',
+        cursor:
+            'pointer',
+    },
+
+    kindSelector: {
+        display:
+            'grid',
+        gridTemplateColumns:
+            '1fr 1fr',
+        gap:
+            10,
+        marginBottom:
+            20,
+    },
+
+    kindButton: {
+        minHeight:
+            50,
+        border:
+            '1px solid #2d3949',
+        background:
+            '#151f2c',
+        color:
+            '#9caabd',
+        borderRadius:
+            10,
+        cursor:
+            'pointer',
+    },
+
+    kindButtonActive: {
+        border:
+            '1px solid #3b82f6',
+        color:
+            '#fff',
+        background:
+            'rgba(59,130,246,.12)',
     },
 
     formGrid: {
-        display: 'grid',
+        display:
+            'grid',
         gridTemplateColumns:
-            'repeat(auto-fit, minmax(250px, 1fr))',
-        gap: 18,
+            'repeat(2, minmax(0, 1fr))',
+        gap:
+            16,
     },
 
     field: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 8,
-        fontSize: 13,
-        fontWeight: 600,
-        color: '#cbd5e1',
+        display:
+            'grid',
+        gap:
+            7,
+        fontSize:
+            13,
+        fontWeight:
+            700,
+    },
+
+    fieldTitle: {
+        fontSize:
+            13,
+        fontWeight:
+            700,
     },
 
     input: {
-        width: '100%',
-        height: 44,
-        boxSizing: 'border-box',
-        padding: '0 12px',
-        borderRadius: 10,
-        border: '1px solid rgba(148, 163, 184, 0.16)',
-        background: '#111827',
-        color: '#f8fafc',
-        outline: 'none',
-        font: 'inherit',
+        width:
+            '100%',
+        minHeight:
+            44,
+        boxSizing:
+            'border-box',
+        border:
+            '1px solid #303b4a',
+        borderRadius:
+            10,
+        background:
+            '#1a2332',
+        color:
+            '#fff',
+        padding:
+            '10px 12px',
     },
 
-    readOnlyValue: {
-        minHeight: 64,
-        padding: '11px 12px',
-        borderRadius: 10,
-        border: '1px solid rgba(148, 163, 184, 0.12)',
-        background: 'rgba(15, 23, 42, 0.55)',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        gap: 3,
-        color: '#f8fafc',
-        fontSize: 16,
-        fontWeight: 700,
+    fullWidth: {
+        gridColumn:
+            '1 / -1',
+        display:
+            'grid',
+        gap:
+            12,
     },
 
-    formError: {
-        marginTop: 18,
-        padding: 12,
-        borderRadius: 10,
-        background: 'rgba(239, 68, 68, 0.1)',
-        border: '1px solid rgba(239, 68, 68, 0.2)',
-        color: '#fca5a5',
+    presetRow: {
+        display:
+            'flex',
+        gap:
+            8,
+        flexWrap:
+            'wrap',
+    },
+
+    presetButton: {
+        border:
+            '1px solid #303b4a',
+        borderRadius:
+            9,
+        background:
+            '#151e29',
+        color:
+            '#9caabd',
+        padding:
+            '9px 14px',
+        cursor:
+            'pointer',
+    },
+
+    presetButtonActive: {
+        border:
+            '1px solid #3b82f6',
+        background:
+            'rgba(59,130,246,.12)',
+        color:
+            '#fff',
+    },
+
+    widthSelector: {
+        display:
+            'flex',
+        gap:
+            8,
+        flexWrap:
+            'wrap',
+    },
+
+    widthChip: {
+        display:
+            'flex',
+        alignItems:
+            'center',
+        gap:
+            6,
+        border:
+            '1px solid rgba(59,130,246,.35)',
+        borderRadius:
+            999,
+        background:
+            'rgba(59,130,246,.10)',
+        color:
+            '#bfdbfe',
+        padding:
+            '7px 11px',
+        cursor:
+            'pointer',
+    },
+
+    customWidthRow: {
+        display:
+            'grid',
+        gridTemplateColumns:
+            '1fr auto',
+        gap:
+            8,
+    },
+
+    articlePreview: {
+        display:
+            'grid',
+        gap:
+            6,
+        padding:
+            12,
+        border:
+            '1px solid #293542',
+        borderRadius:
+            10,
+        background:
+            '#101820',
+    },
+
+    previewTitle: {
+        fontWeight:
+            700,
+        marginBottom:
+            4,
+    },
+
+    previewRow: {
+        display:
+            'flex',
+        justifyContent:
+            'space-between',
+        gap:
+            12,
+        color:
+            '#9caabd',
+        fontSize:
+            12,
+    },
+
+    colorPreview: {
+        display:
+            'flex',
+        alignItems:
+            'center',
+        gap:
+            12,
     },
 
     modalFooter: {
-        marginTop: 26,
-        paddingTop: 20,
-        borderTop:
-            '1px solid rgba(148, 163, 184, 0.12)',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        gap: 14,
-        flexWrap: 'wrap',
+        display:
+            'flex',
+        gap:
+            10,
+        marginTop:
+            24,
     },
 
-    footerActions: {
-        display: 'flex',
-        gap: 10,
+    helper: {
+        color:
+            '#77879a',
+        fontSize:
+            11,
     },
 
-    archiveButton: {
-        minHeight: 42,
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '0 14px',
-        borderRadius: 10,
-        border: '1px solid rgba(239,68,68,.25)',
-        background: 'rgba(239,68,68,.08)',
-        color: '#fca5a5',
-        cursor: 'pointer',
+    errorBox: {
+        padding:
+            12,
+        marginBottom:
+            16,
+        borderRadius:
+            9,
+        background:
+            'rgba(127,29,29,.2)',
+        color:
+            '#fca5a5',
     },
 
-    restoreButton: {
-        minHeight: 42,
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '0 14px',
-        borderRadius: 10,
-        border: '1px solid rgba(34,197,94,.25)',
-        background: 'rgba(34,197,94,.08)',
-        color: '#86efac',
-        cursor: 'pointer',
+    emptyState: {
+        padding:
+            30,
+        textAlign:
+            'center',
+        color:
+            '#718096',
     },
 };

@@ -62,6 +62,21 @@ public sealed class UpdateMaterialHandler
                 "Неизвестная единица измерения.");
         }
 
+        if (!Enum.TryParse<MaterialKind>(
+                command.Kind,
+                true,
+                out var kind))
+        {
+            throw new ArgumentException(
+                "Неизвестный тип материала.");
+        }
+
+        if (!Enum.IsDefined(kind))
+        {
+            throw new ArgumentException(
+                "Неизвестный тип материала.");
+        }
+
         if (await _materialRepository.ArticleExistsAsync(
                 command.Article,
                 material.Id))
@@ -70,7 +85,8 @@ public sealed class UpdateMaterialHandler
                 $"Другой материал уже использует артикул '{command.Article}'.");
         }
 
-        material.Rename(command.Name);
+        material.Rename(
+            command.Name);
 
         material.ChangeArticle(
             command.Article);
@@ -78,10 +94,31 @@ public sealed class UpdateMaterialHandler
         material.ChangeCategory(
             command.CategoryId);
 
-        material.ChangeUnit(unit);
+        material.ChangeUnit(
+            unit);
 
         material.ChangeMinimumQuantity(
             command.MinimumQuantity);
+
+        if (kind == MaterialKind.Oracal641)
+        {
+            if (!command.WidthMeters.HasValue)
+            {
+                throw new ArgumentException(
+                    "Для Oracal 641 необходимо указать ширину.");
+            }
+
+            material.ConfigureOracal641(
+                command.WidthMeters.Value,
+                command.ColorCode ?? string.Empty,
+                command.ColorName ?? string.Empty,
+                command.ColorHex ?? string.Empty);
+        }
+        else
+        {
+            material.ConfigureStandard(
+                command.WidthMeters);
+        }
 
         await _materialRepository.UpdateAsync(
             material);

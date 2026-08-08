@@ -5,4 +5,9 @@ public sealed record CreateMaterialRequest(
     string Article,
     Guid CategoryId,
     string Unit,
-    decimal MinimumQuantity);
+    decimal MinimumQuantity,
+    string Kind = "Standard",
+    decimal? WidthMeters = null,
+    string? ColorCode = null,
+    string? ColorName = null,
+    string? ColorHex = null);

@@ -16,6 +16,7 @@ import IssuePage from './pages/IssuePage';
 import LoginPage from './pages/LoginPage';
 import MaterialsPage from './pages/MaterialsPage';
 import OperationsPage from './pages/OperationsPage';
+import OracalInventoryPage from './pages/OracalInventoryPage';
 import ReceivingPage from './pages/ReceivingPage';
 import SettingsPage from './pages/SettingsPage';
 import StockPage from './pages/StockPage';
@@ -64,6 +65,11 @@ export default function App() {
                     <Route
                         path="/inventory"
                         element={<InventoryPage />}
+                    />
+
+                    <Route
+                        path="/inventory/oracal"
+                        element={<OracalInventoryPage />}
                     />
 
                     <Route

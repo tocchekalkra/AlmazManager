@@ -12,6 +12,8 @@ public sealed class WarehouseDocument : BaseEntity
         string number,
         WarehouseDocumentType type,
         Guid userId,
+        string? supplier,
+        string? externalNumber,
         string? comment)
     {
         if (string.IsNullOrWhiteSpace(number))
@@ -33,10 +35,13 @@ public sealed class WarehouseDocument : BaseEntity
         UserId = userId;
         Status = WarehouseDocumentStatus.Draft;
 
+        ChangeSupplier(supplier);
+        ChangeExternalNumber(externalNumber);
         ChangeComment(comment);
     }
 
-    public string Number { get; private set; } = string.Empty;
+    public string Number { get; private set; } =
+        string.Empty;
 
     public WarehouseDocumentType Type { get; private set; }
 
@@ -44,13 +49,55 @@ public sealed class WarehouseDocument : BaseEntity
 
     public Guid UserId { get; private set; }
 
+    public string? Supplier { get; private set; }
+
+    public string? ExternalNumber { get; private set; }
+
     public string? Comment { get; private set; }
 
     public DateTime? PostedAtUtc { get; private set; }
 
     public DateTime? CancelledAtUtc { get; private set; }
 
-    public List<WarehouseDocumentItem> Items { get; private set; } = new();
+    public List<WarehouseDocumentItem> Items { get; private set; } =
+        new();
+
+    public void ChangeSupplier(string? supplier)
+    {
+        EnsureDraft();
+
+        if (!string.IsNullOrWhiteSpace(supplier) &&
+            supplier.Trim().Length > 250)
+        {
+            throw new ArgumentException(
+                "Название поставщика не может быть длиннее 250 символов.",
+                nameof(supplier));
+        }
+
+        Supplier =
+            string.IsNullOrWhiteSpace(supplier)
+                ? null
+                : supplier.Trim();
+    }
+
+    public void ChangeExternalNumber(
+        string? externalNumber)
+    {
+        EnsureDraft();
+
+        if (!string.IsNullOrWhiteSpace(externalNumber) &&
+            externalNumber.Trim().Length > 100)
+        {
+            throw new ArgumentException(
+                "Номер накладной не может быть длиннее 100 символов.",
+                nameof(externalNumber));
+        }
+
+        ExternalNumber =
+            string.IsNullOrWhiteSpace(externalNumber)
+                ? null
+                : externalNumber.Trim();
+    }
 
     public void ChangeComment(string? comment)
     {
@@ -64,9 +111,10 @@ public sealed class WarehouseDocument : BaseEntity
                 nameof(comment));
         }
 
-        Comment = string.IsNullOrWhiteSpace(comment)
-            ? null
-            : comment.Trim();
+        Comment =
+            string.IsNullOrWhiteSpace(comment)
+                ? null
+                : comment.Trim();
     }
 
     public void AddItem(
@@ -108,7 +156,8 @@ public sealed class WarehouseDocument : BaseEntity
     {
         EnsureDraft();
 
-        var requestedItems = items.ToList();
+        var requestedItems =
+            items.ToList();
 
         if (requestedItems.Count == 0)
         {
@@ -116,9 +165,10 @@ public sealed class WarehouseDocument : BaseEntity
                 "Документ должен содержать хотя бы одну позицию.");
         }
 
-        var duplicates = requestedItems
-            .GroupBy(x => x.MaterialId)
-            .Any(group => group.Count() > 1);
+        var duplicates =
+            requestedItems
+                .GroupBy(x => x.MaterialId)
+                .Any(group => group.Count() > 1);
 
         if (duplicates)
         {
@@ -142,29 +192,27 @@ public sealed class WarehouseDocument : BaseEntity
             }
         }
 
-        var requestedMaterialIds = requestedItems
-            .Select(x => x.MaterialId)
-            .ToHashSet();
+        var requestedMaterialIds =
+            requestedItems
+                .Select(x => x.MaterialId)
+                .ToHashSet();
 
-        // Удаляем только те позиции,
-        // которых больше нет в новом составе документа.
-        var itemsToRemove = Items
-            .Where(existing =>
-                !requestedMaterialIds.Contains(
-                    existing.MaterialId))
-            .ToList();
+        var itemsToRemove =
+            Items
+                .Where(existing =>
+                    !requestedMaterialIds.Contains(
+                        existing.MaterialId))
+                .ToList();
 
         foreach (var itemToRemove in itemsToRemove)
         {
             Items.Remove(itemToRemove);
         }
 
-        // Существующие позиции обновляем,
-        // а действительно новые — добавляем.
         foreach (var requestedItem in requestedItems)
         {
-            var existingItem = Items
-                .FirstOrDefault(x =>
+            var existingItem =
+                Items.FirstOrDefault(x =>
                     x.MaterialId ==
                     requestedItem.MaterialId);
 
@@ -194,25 +242,33 @@ public sealed class WarehouseDocument : BaseEntity
                 "Документ не содержит материалов.");
         }
 
-        Status = WarehouseDocumentStatus.Posted;
-        PostedAtUtc = DateTime.UtcNow;
+        Status =
+            WarehouseDocumentStatus.Posted;
+
+        PostedAtUtc =
+            DateTime.UtcNow;
     }
 
     public void Cancel()
     {
-        if (Status != WarehouseDocumentStatus.Posted)
+        if (Status !=
+            WarehouseDocumentStatus.Posted)
         {
             throw new InvalidOperationException(
                 "Отменить можно только проведённый документ.");
         }
 
-        Status = WarehouseDocumentStatus.Cancelled;
-        CancelledAtUtc = DateTime.UtcNow;
+        Status =
+            WarehouseDocumentStatus.Cancelled;
+
+        CancelledAtUtc =
+            DateTime.UtcNow;
     }
 
     public void EnsureCanDelete()
     {
-        if (Status != WarehouseDocumentStatus.Draft)
+        if (Status !=
+            WarehouseDocumentStatus.Draft)
         {
             throw new InvalidOperationException(
                 "Удалить можно только черновик документа.");
@@ -221,7 +277,8 @@ public sealed class WarehouseDocument : BaseEntity
 
     private void EnsureDraft()
     {
-        if (Status != WarehouseDocumentStatus.Draft)
+        if (Status !=
+            WarehouseDocumentStatus.Draft)
         {
             throw new InvalidOperationException(
                 "Изменять можно только черновик документа.");

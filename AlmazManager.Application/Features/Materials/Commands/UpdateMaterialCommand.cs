@@ -6,4 +6,9 @@ public sealed record UpdateMaterialCommand(
     string Article,
     Guid CategoryId,
     string Unit,
-    decimal MinimumQuantity);
+    decimal MinimumQuantity,
+    string Kind,
+    decimal? WidthMeters,
+    string? ColorCode,
+    string? ColorName,
+    string? ColorHex);

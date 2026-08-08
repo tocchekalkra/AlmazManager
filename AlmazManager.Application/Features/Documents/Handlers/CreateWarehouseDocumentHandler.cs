@@ -1,4 +1,6 @@
 ﻿using AlmazManager.Application.Features.Documents.Commands;
+using AlmazManager.Application.Interfaces;
+using AlmazManager.Application.Security;
 using AlmazManager.Contracts.Responses.Documents;
 using AlmazManager.Domain.Entities;
 using AlmazManager.Domain.Enums;
@@ -8,22 +10,47 @@ namespace AlmazManager.Application.Features.Documents.Handlers;
 
 public sealed class CreateWarehouseDocumentHandler
 {
-    private readonly IWarehouseDocumentRepository _documentRepository;
-    private readonly IMaterialRepository _materialRepository;
-    private readonly IUserRepository _userRepository;
+    private readonly IWarehouseDocumentRepository
+        _documentRepository;
+
+    private readonly IMaterialRepository
+        _materialRepository;
+
+    private readonly IUserRepository
+        _userRepository;
+
+    private readonly ICurrentUserService
+        _currentUserService;
+
+    private readonly ICategoryAccessService
+        _categoryAccessService;
 
     public CreateWarehouseDocumentHandler(
         IWarehouseDocumentRepository documentRepository,
         IMaterialRepository materialRepository,
-        IUserRepository userRepository)
+        IUserRepository userRepository,
+        ICurrentUserService currentUserService,
+        ICategoryAccessService categoryAccessService)
     {
-        _documentRepository = documentRepository;
-        _materialRepository = materialRepository;
-        _userRepository = userRepository;
+        _documentRepository =
+            documentRepository;
+
+        _materialRepository =
+            materialRepository;
+
+        _userRepository =
+            userRepository;
+
+        _currentUserService =
+            currentUserService;
+
+        _categoryAccessService =
+            categoryAccessService;
     }
 
-    public async Task<WarehouseDocumentResponse> HandleAsync(
-        CreateWarehouseDocumentCommand command)
+    public async Task<WarehouseDocumentResponse>
+        HandleAsync(
+            CreateWarehouseDocumentCommand command)
     {
         if (!Enum.TryParse<WarehouseDocumentType>(
                 command.Type,
@@ -34,13 +61,24 @@ public sealed class CreateWarehouseDocumentHandler
                 "Неизвестный тип документа.");
         }
 
-        var user = await _userRepository.GetByIdAsync(
-            command.UserId);
+        if (!Enum.IsDefined(type))
+        {
+            throw new ArgumentException(
+                "Неизвестный тип документа.");
+        }
+
+        var currentUserId =
+            _currentUserService.UserId;
+
+        var user =
+            await _userRepository
+                .GetByIdAsync(
+                    currentUserId);
 
         if (user is null)
         {
             throw new InvalidOperationException(
-                "Пользователь не найден.");
+                "Текущий пользователь не найден.");
         }
 
         if (!user.IsActive)
@@ -56,10 +94,10 @@ public sealed class CreateWarehouseDocumentHandler
                 "Документ должен содержать хотя бы одну позицию.");
         }
 
-        var duplicates = command.Items
-            .GroupBy(x => x.MaterialId)
-            .Where(x => x.Count() > 1)
-            .Any();
+        var duplicates =
+            command.Items
+                .GroupBy(x => x.MaterialId)
+                .Any(x => x.Count() > 1);
 
         if (duplicates)
         {
@@ -77,8 +115,9 @@ public sealed class CreateWarehouseDocumentHandler
             }
 
             var material =
-                await _materialRepository.GetByIdAsync(
-                    item.MaterialId);
+                await _materialRepository
+                    .GetByIdAsync(
+                        item.MaterialId);
 
             if (material is null)
             {
@@ -91,15 +130,30 @@ public sealed class CreateWarehouseDocumentHandler
                 throw new InvalidOperationException(
                     $"Материал '{material.Name}' находится в архиве.");
             }
+
+            var permission =
+                type ==
+                WarehouseDocumentType.Receiving
+                    ? CategoryPermission.Receive
+                    : CategoryPermission.Issue;
+
+            await _categoryAccessService
+                .EnsureAccessAsync(
+                    material.CategoryId,
+                    permission);
         }
 
-        var number = GenerateDocumentNumber(type);
+        var number =
+            GenerateDocumentNumber(type);
 
-        var document = new WarehouseDocument(
-            number,
-            type,
-            command.UserId,
-            command.Comment);
+        var document =
+            new WarehouseDocument(
+                number,
+                type,
+                currentUserId,
+                command.Supplier,
+                command.ExternalNumber,
+                command.Comment);
 
         foreach (var item in command.Items)
         {
@@ -108,8 +162,11 @@ public sealed class CreateWarehouseDocumentHandler
                 item.Quantity);
         }
 
-        await _documentRepository.AddAsync(document);
-        await _documentRepository.SaveChangesAsync();
+        await _documentRepository
+            .AddAsync(document);
+
+        await _documentRepository
+            .SaveChangesAsync();
 
         return Map(document);
     }
@@ -117,18 +174,26 @@ public sealed class CreateWarehouseDocumentHandler
     private static string GenerateDocumentNumber(
         WarehouseDocumentType type)
     {
-        var prefix = type switch
-        {
-            WarehouseDocumentType.Receiving => "RCV",
-            WarehouseDocumentType.Issue => "ISS",
-            _ => "DOC"
-        };
+        var prefix =
+            type switch
+            {
+                WarehouseDocumentType.Receiving =>
+                    "RCV",
 
-        var suffix = Guid.NewGuid()
-            .ToString("N")[..6]
-            .ToUpperInvariant();
+                WarehouseDocumentType.Issue =>
+                    "ISS",
 
-        return $"{prefix}-{DateTime.UtcNow:yyyyMMddHHmmss}-{suffix}";
+                _ =>
+                    "DOC"
+            };
+
+        var suffix =
+            Guid.NewGuid()
+                .ToString("N")[..6]
+                .ToUpperInvariant();
+
+        return
+            $"{prefix}-{DateTime.UtcNow:yyyyMMddHHmmss}-{suffix}";
     }
 
     private static WarehouseDocumentResponse Map(
@@ -140,6 +205,8 @@ public sealed class CreateWarehouseDocumentHandler
             document.Type.ToString(),
             document.Status.ToString(),
             document.UserId,
+            document.Supplier,
+            document.ExternalNumber,
             document.Comment,
             document.CreatedAtUtc,
             document.PostedAtUtc,

@@ -1,20 +1,11 @@
 ﻿namespace AlmazManager.Contracts.Requests.Materials;
 
-public sealed class MaterialCatalogRequest
-{
-    public string? Search { get; init; }
-
-    public Guid? CategoryId { get; init; }
-
-    public bool? BelowMinimum { get; init; }
-
-    public bool? HasStock { get; init; }
-
-    public string SortBy { get; init; } = "name";
-
-    public string SortDirection { get; init; } = "asc";
-
-    public int Page { get; init; } = 1;
-
-    public int PageSize { get; init; } = 20;
-}
+public sealed record MaterialCatalogRequest(
+    int Page = 1,
+    int PageSize = 50,
+    string? Search = null,
+    Guid? CategoryId = null,
+    bool? BelowMinimum = null,
+    bool? HasStock = null,
+    string? SortBy = null,
+    string? SortDirection = null);

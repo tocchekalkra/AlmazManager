@@ -9,4 +9,9 @@ public sealed record MaterialCatalogItemResponse(
     decimal MinimumQuantity,
     decimal CurrentQuantity,
     bool BelowMinimum,
-    bool IsActive);
+    bool IsActive,
+    string Kind,
+    decimal? WidthMeters,
+    string? ColorCode,
+    string? ColorName,
+    string? ColorHex);
