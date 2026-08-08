@@ -3,7 +3,7 @@
 public enum UserRole
 {
     Administrator = 1,
-    Storekeeper = 2,
-    Manager = 3,
+    Printer = 2,
+    PlotterOperator = 3,
     Viewer = 4
 }

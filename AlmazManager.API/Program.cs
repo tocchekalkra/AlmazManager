@@ -182,6 +182,10 @@ builder.Services.AddScoped<
     UserRepository>();
 
 builder.Services.AddScoped<
+    IUserCategoryAccessRepository,
+    UserCategoryAccessRepository>();
+
+builder.Services.AddScoped<
     IWarehouseDocumentRepository,
     WarehouseDocumentRepository>();
 
@@ -216,6 +220,12 @@ builder.Services.AddScoped<LoginUserHandler>();
 
 builder.Services.AddScoped<RegisterUserHandler>();
 builder.Services.AddScoped<GetUsersHandler>();
+
+builder.Services.AddScoped<
+    GetUserCategoryAccessesHandler>();
+
+builder.Services.AddScoped<
+    UpdateUserCategoryAccessesHandler>();
 
 
 // ============================================================

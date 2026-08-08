@@ -1,17 +1,1715 @@
+import {
+    useEffect,
+    useMemo,
+    useState,
+    type CSSProperties,
+    type FormEvent,
+} from 'react';
+
+import {
+    KeyRound,
+    Plus,
+    RefreshCcw,
+    Save,
+    Search,
+    ShieldCheck,
+    UserCog,
+    Users,
+    X,
+} from 'lucide-react';
+
+import api from '../api/api';
+
+type UserItem = {
+    id: string;
+    fullName: string;
+    login: string;
+    role: string;
+    isActive: boolean;
+    createdAtUtc: string;
+};
+
+type CategoryAccess = {
+    categoryId: string;
+    categoryName: string;
+    canView: boolean;
+    canReceive: boolean;
+    canIssue: boolean;
+    canInventory: boolean;
+};
+
+type CreateUserForm = {
+    fullName: string;
+    login: string;
+    password: string;
+    role: string;
+};
+
+const emptyCreateForm: CreateUserForm = {
+    fullName: '',
+    login: '',
+    password: '',
+    role: 'Printer',
+};
+
 export default function UsersPage() {
+    const [users, setUsers] = useState<UserItem[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    const [search, setSearch] = useState('');
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+
+    const [showCreateModal, setShowCreateModal] =
+        useState(false);
+
+    const [createForm, setCreateForm] =
+        useState<CreateUserForm>(emptyCreateForm);
+
+    const [creating, setCreating] = useState(false);
+
+    const [selectedUser, setSelectedUser] =
+        useState<UserItem | null>(null);
+
+    const [accesses, setAccesses] =
+        useState<CategoryAccess[]>([]);
+
+    const [loadingAccesses, setLoadingAccesses] =
+        useState(false);
+
+    const [savingAccesses, setSavingAccesses] =
+        useState(false);
+
+    useEffect(() => {
+        loadUsers();
+    }, []);
+
+    async function loadUsers() {
+        try {
+            setLoading(true);
+            setError('');
+
+            const response =
+                await api.get<UserItem[]>('/users');
+
+            setUsers(response.data ?? []);
+        } catch (requestError: any) {
+            console.error(
+                'Ошибка загрузки пользователей:',
+                requestError,
+            );
+
+            setError(
+                requestError?.response?.data?.message ??
+                requestError?.response?.data?.title ??
+                'Не удалось загрузить пользователей.',
+            );
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    const filteredUsers = useMemo(() => {
+        const query = search
+            .trim()
+            .toLowerCase();
+
+        if (!query) {
+            return users;
+        }
+
+        return users.filter(
+            (user) =>
+                user.fullName
+                    .toLowerCase()
+                    .includes(query) ||
+                user.login
+                    .toLowerCase()
+                    .includes(query) ||
+                getRoleLabel(user.role)
+                    .toLowerCase()
+                    .includes(query),
+        );
+    }, [users, search]);
+
+    const activeUsers =
+        users.filter(
+            (user) => user.isActive,
+        ).length;
+
+    const administrators =
+        users.filter(
+            (user) =>
+                user.role === 'Administrator',
+        ).length;
+
+    const workers =
+        users.filter(
+            (user) =>
+                user.role === 'Printer' ||
+                user.role === 'PlotterOperator',
+        ).length;
+
+    async function handleCreateUser(
+        event: FormEvent<HTMLFormElement>,
+    ) {
+        event.preventDefault();
+
+        setError('');
+        setSuccess('');
+
+        if (
+            !createForm.fullName.trim() ||
+            !createForm.login.trim() ||
+            !createForm.password.trim()
+        ) {
+            setError(
+                'Заполните имя, логин и пароль.',
+            );
+
+            return;
+        }
+
+        try {
+            setCreating(true);
+
+            await api.post(
+                '/users/register',
+                {
+                    fullName:
+                        createForm.fullName.trim(),
+
+                    login:
+                        createForm.login.trim(),
+
+                    password:
+                        createForm.password,
+
+                    role:
+                        createForm.role,
+                },
+            );
+
+            setShowCreateModal(false);
+            setCreateForm(emptyCreateForm);
+
+            setSuccess(
+                'Пользователь успешно создан.',
+            );
+
+            await loadUsers();
+        } catch (requestError: any) {
+            console.error(
+                'Ошибка создания пользователя:',
+                requestError,
+            );
+
+            setError(
+                requestError?.response?.data?.message ??
+                requestError?.response?.data?.title ??
+                'Не удалось создать пользователя.',
+            );
+        } finally {
+            setCreating(false);
+        }
+    }
+
+    async function openAccessModal(
+        user: UserItem,
+    ) {
+        setSelectedUser(user);
+        setAccesses([]);
+        setError('');
+        setSuccess('');
+
+        try {
+            setLoadingAccesses(true);
+
+            const response =
+                await api.get<CategoryAccess[]>(
+                    `/users/${user.id}/category-access`,
+                );
+
+            setAccesses(
+                response.data ?? [],
+            );
+        } catch (requestError: any) {
+            console.error(
+                'Ошибка загрузки прав:',
+                requestError,
+            );
+
+            setError(
+                requestError?.response?.data?.message ??
+                requestError?.response?.data?.title ??
+                'Не удалось загрузить права пользователя.',
+            );
+        } finally {
+            setLoadingAccesses(false);
+        }
+    }
+
+    function updateAccess(
+        categoryId: string,
+        field:
+            | 'canView'
+            | 'canReceive'
+            | 'canIssue'
+            | 'canInventory',
+        value: boolean,
+    ) {
+        setAccesses(
+            (current) =>
+                current.map(
+                    (access) => {
+                        if (
+                            access.categoryId !==
+                            categoryId
+                        ) {
+                            return access;
+                        }
+
+                        if (
+                            field === 'canView' &&
+                            value === false
+                        ) {
+                            return {
+                                ...access,
+                                canView: false,
+                                canReceive: false,
+                                canIssue: false,
+                                canInventory: false,
+                            };
+                        }
+
+                        if (
+                            field !== 'canView' &&
+                            value === true
+                        ) {
+                            return {
+                                ...access,
+                                [field]: true,
+                                canView: true,
+                            };
+                        }
+
+                        return {
+                            ...access,
+                            [field]: value,
+                        };
+                    },
+                ),
+        );
+    }
+
+    function setAllForCategory(
+        categoryId: string,
+        value: boolean,
+    ) {
+        setAccesses(
+            (current) =>
+                current.map(
+                    (access) =>
+                        access.categoryId ===
+                            categoryId
+                            ? {
+                                ...access,
+                                canView: value,
+                                canReceive: value,
+                                canIssue: value,
+                                canInventory: value,
+                            }
+                            : access,
+                ),
+        );
+    }
+
+    function enableEverything() {
+        setAccesses(
+            (current) =>
+                current.map(
+                    (access) => ({
+                        ...access,
+                        canView: true,
+                        canReceive: true,
+                        canIssue: true,
+                        canInventory: true,
+                    }),
+                ),
+        );
+    }
+
+    function disableEverything() {
+        setAccesses(
+            (current) =>
+                current.map(
+                    (access) => ({
+                        ...access,
+                        canView: false,
+                        canReceive: false,
+                        canIssue: false,
+                        canInventory: false,
+                    }),
+                ),
+        );
+    }
+
+    async function saveAccesses() {
+        if (!selectedUser) {
+            return;
+        }
+
+        if (
+            selectedUser.role ===
+            'Administrator'
+        ) {
+            return;
+        }
+
+        try {
+            setSavingAccesses(true);
+            setError('');
+            setSuccess('');
+
+            await api.put(
+                `/users/${selectedUser.id}/category-access`,
+                {
+                    accesses:
+                        accesses.map(
+                            (access) => ({
+                                categoryId:
+                                    access.categoryId,
+
+                                canView:
+                                    access.canView,
+
+                                canReceive:
+                                    access.canReceive,
+
+                                canIssue:
+                                    access.canIssue,
+
+                                canInventory:
+                                    access.canInventory,
+                            }),
+                        ),
+                },
+            );
+
+            setSuccess(
+                `Права пользователя «${selectedUser.fullName}» сохранены.`,
+            );
+
+            setSelectedUser(null);
+            setAccesses([]);
+        } catch (requestError: any) {
+            console.error(
+                'Ошибка сохранения прав:',
+                requestError,
+            );
+
+            setError(
+                requestError?.response?.data?.message ??
+                requestError?.response?.data?.title ??
+                'Не удалось сохранить права пользователя.',
+            );
+        } finally {
+            setSavingAccesses(false);
+        }
+    }
+
     return (
         <div className="page">
             <div className="page-heading">
                 <div>
-                    <p className="eyebrow">WAREHOUSE</p>
-                    <h1>Пользователи</h1>
-                    <p>Управление пользователями системы.</p>
+                    <p className="eyebrow">
+                        SYSTEM
+                    </p>
+
+                    <h1>
+                        Пользователи
+                    </h1>
+
+                    <p>
+                        Управление пользователями,
+                        ролями и доступом к категориям склада.
+                    </p>
+                </div>
+
+                <div
+                    style={{
+                        display: 'flex',
+                        gap: 10,
+                        flexWrap: 'wrap',
+                    }}
+                >
+                    <button
+                        type="button"
+                        className="button secondary"
+                        onClick={loadUsers}
+                        disabled={loading}
+                    >
+                        <RefreshCcw
+                            size={17}
+                        />
+
+                        Обновить
+                    </button>
+
+                    <button
+                        type="button"
+                        className="button primary"
+                        onClick={() => {
+                            setError('');
+                            setSuccess('');
+                            setCreateForm(
+                                emptyCreateForm,
+                            );
+                            setShowCreateModal(
+                                true,
+                            );
+                        }}
+                    >
+                        <Plus size={17} />
+
+                        Добавить пользователя
+                    </button>
                 </div>
             </div>
 
-            <section className="panel empty-page">
-                Раздел склада будет подключён следующим блоком.
+            {error && (
+                <div
+                    style={{
+                        ...messageStyle,
+                        borderColor:
+                            'rgba(248,113,113,.35)',
+                        background:
+                            'rgba(127,29,29,.18)',
+                    }}
+                >
+                    {error}
+                </div>
+            )}
+
+            {success && (
+                <div
+                    style={{
+                        ...messageStyle,
+                        borderColor:
+                            'rgba(74,222,128,.3)',
+                        background:
+                            'rgba(20,83,45,.18)',
+                    }}
+                >
+                    {success}
+                </div>
+            )}
+
+            <div style={statsGrid}>
+                <StatCard
+                    icon={<Users size={20} />}
+                    label="Всего пользователей"
+                    value={users.length}
+                />
+
+                <StatCard
+                    icon={
+                        <ShieldCheck
+                            size={20}
+                        />
+                    }
+                    label="Активных"
+                    value={activeUsers}
+                />
+
+                <StatCard
+                    icon={
+                        <KeyRound
+                            size={20}
+                        />
+                    }
+                    label="Администраторов"
+                    value={administrators}
+                />
+
+                <StatCard
+                    icon={
+                        <UserCog
+                            size={20}
+                        />
+                    }
+                    label="Печатников / плоттерщиков"
+                    value={workers}
+                />
+            </div>
+
+            <section className="panel">
+                <div
+                    style={{
+                        display: 'flex',
+                        justifyContent:
+                            'space-between',
+                        alignItems:
+                            'center',
+                        gap: 16,
+                        flexWrap: 'wrap',
+                        marginBottom: 18,
+                    }}
+                >
+                    <div>
+                        <h2
+                            style={{
+                                margin: 0,
+                            }}
+                        >
+                            Пользователи системы
+                        </h2>
+
+                        <p
+                            style={{
+                                margin:
+                                    '6px 0 0',
+                                color:
+                                    'var(--text-muted)',
+                            }}
+                        >
+                            Администратор может
+                            назначать права по каждой
+                            категории отдельно.
+                        </p>
+                    </div>
+
+                    <div
+                        style={{
+                            position:
+                                'relative',
+                            minWidth: 280,
+                        }}
+                    >
+                        <Search
+                            size={17}
+                            style={{
+                                position:
+                                    'absolute',
+                                left: 13,
+                                top: '50%',
+                                transform:
+                                    'translateY(-50%)',
+                                opacity: 0.55,
+                            }}
+                        />
+
+                        <input
+                            value={search}
+                            onChange={(event) =>
+                                setSearch(
+                                    event.target
+                                        .value,
+                                )
+                            }
+                            placeholder="Поиск по имени, логину или роли"
+                            style={{
+                                ...inputStyle,
+                                paddingLeft:
+                                    40,
+                            }}
+                        />
+                    </div>
+                </div>
+
+                {loading ? (
+                    <div
+                        style={
+                            emptyStateStyle
+                        }
+                    >
+                        Загрузка пользователей...
+                    </div>
+                ) : filteredUsers.length ===
+                    0 ? (
+                    <div
+                        style={
+                            emptyStateStyle
+                        }
+                    >
+                        Пользователи не найдены.
+                    </div>
+                ) : (
+                    <div
+                        style={{
+                            overflowX:
+                                'auto',
+                        }}
+                    >
+                        <table
+                            style={
+                                tableStyle
+                            }
+                        >
+                            <thead>
+                                <tr>
+                                    <th
+                                        style={
+                                            thStyle
+                                        }
+                                    >
+                                        Пользователь
+                                    </th>
+
+                                    <th
+                                        style={
+                                            thStyle
+                                        }
+                                    >
+                                        Логин
+                                    </th>
+
+                                    <th
+                                        style={
+                                            thStyle
+                                        }
+                                    >
+                                        Роль
+                                    </th>
+
+                                    <th
+                                        style={
+                                            thStyle
+                                        }
+                                    >
+                                        Статус
+                                    </th>
+
+                                    <th
+                                        style={
+                                            thStyle
+                                        }
+                                    >
+                                        Создан
+                                    </th>
+
+                                    <th
+                                        style={{
+                                            ...thStyle,
+                                            textAlign:
+                                                'right',
+                                        }}
+                                    >
+                                        Действия
+                                    </th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {filteredUsers.map(
+                                    (user) => (
+                                        <tr
+                                            key={
+                                                user.id
+                                            }
+                                        >
+                                            <td
+                                                style={
+                                                    tdStyle
+                                                }
+                                            >
+                                                <strong>
+                                                    {
+                                                        user.fullName
+                                                    }
+                                                </strong>
+                                            </td>
+
+                                            <td
+                                                style={
+                                                    tdStyle
+                                                }
+                                            >
+                                                @
+                                                {
+                                                    user.login
+                                                }
+                                            </td>
+
+                                            <td
+                                                style={
+                                                    tdStyle
+                                                }
+                                            >
+                                                <span
+                                                    style={
+                                                        roleBadgeStyle
+                                                    }
+                                                >
+                                                    {getRoleLabel(
+                                                        user.role,
+                                                    )}
+                                                </span>
+                                            </td>
+
+                                            <td
+                                                style={
+                                                    tdStyle
+                                                }
+                                            >
+                                                <span
+                                                    style={{
+                                                        ...statusBadgeStyle,
+                                                        opacity:
+                                                            user.isActive
+                                                                ? 1
+                                                                : 0.5,
+                                                    }}
+                                                >
+                                                    {user.isActive
+                                                        ? 'Активен'
+                                                        : 'Архив'}
+                                                </span>
+                                            </td>
+
+                                            <td
+                                                style={
+                                                    tdStyle
+                                                }
+                                            >
+                                                {formatDate(
+                                                    user.createdAtUtc,
+                                                )}
+                                            </td>
+
+                                            <td
+                                                style={{
+                                                    ...tdStyle,
+                                                    textAlign:
+                                                        'right',
+                                                }}
+                                            >
+                                                <button
+                                                    type="button"
+                                                    className="button secondary"
+                                                    onClick={() =>
+                                                        openAccessModal(
+                                                            user,
+                                                        )
+                                                    }
+                                                >
+                                                    <ShieldCheck
+                                                        size={
+                                                            16
+                                                        }
+                                                    />
+
+                                                    Права
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ),
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </section>
+
+            {showCreateModal && (
+                <ModalOverlay
+                    onClose={() =>
+                        setShowCreateModal(
+                            false,
+                        )
+                    }
+                >
+                    <form
+                        onSubmit={
+                            handleCreateUser
+                        }
+                        style={modalStyle}
+                    >
+                        <ModalHeader
+                            title="Новый пользователь"
+                            onClose={() =>
+                                setShowCreateModal(
+                                    false,
+                                )
+                            }
+                        />
+
+                        <div
+                            style={{
+                                display:
+                                    'grid',
+                                gap: 16,
+                            }}
+                        >
+                            <Field
+                                label="ФИО / имя"
+                                value={
+                                    createForm.fullName
+                                }
+                                onChange={(
+                                    value,
+                                ) =>
+                                    setCreateForm(
+                                        (
+                                            current,
+                                        ) => ({
+                                            ...current,
+                                            fullName:
+                                                value,
+                                        }),
+                                    )
+                                }
+                            />
+
+                            <Field
+                                label="Логин"
+                                value={
+                                    createForm.login
+                                }
+                                onChange={(
+                                    value,
+                                ) =>
+                                    setCreateForm(
+                                        (
+                                            current,
+                                        ) => ({
+                                            ...current,
+                                            login: value,
+                                        }),
+                                    )
+                                }
+                            />
+
+                            <label
+                                style={
+                                    fieldStyle
+                                }
+                            >
+                                <span>
+                                    Пароль
+                                </span>
+
+                                <input
+                                    type="password"
+                                    value={
+                                        createForm.password
+                                    }
+                                    onChange={(
+                                        event,
+                                    ) =>
+                                        setCreateForm(
+                                            (
+                                                current,
+                                            ) => ({
+                                                ...current,
+                                                password:
+                                                    event
+                                                        .target
+                                                        .value,
+                                            }),
+                                        )
+                                    }
+                                    style={
+                                        inputStyle
+                                    }
+                                />
+                            </label>
+
+                            <label
+                                style={
+                                    fieldStyle
+                                }
+                            >
+                                <span>
+                                    Роль
+                                </span>
+
+                                <select
+                                    value={
+                                        createForm.role
+                                    }
+                                    onChange={(
+                                        event,
+                                    ) =>
+                                        setCreateForm(
+                                            (
+                                                current,
+                                            ) => ({
+                                                ...current,
+                                                role:
+                                                    event
+                                                        .target
+                                                        .value,
+                                            }),
+                                        )
+                                    }
+                                    style={
+                                        inputStyle
+                                    }
+                                >
+                                    <option value="Administrator">
+                                        Администратор
+                                    </option>
+
+                                    <option value="Printer">
+                                        Печатник
+                                    </option>
+
+                                    <option value="PlotterOperator">
+                                        Плоттерщик
+                                    </option>
+
+                                    <option value="Viewer">
+                                        Наблюдатель
+                                    </option>
+                                </select>
+                            </label>
+                        </div>
+
+                        <div
+                            style={
+                                modalFooterStyle
+                            }
+                        >
+                            <button
+                                type="button"
+                                className="button secondary"
+                                onClick={() =>
+                                    setShowCreateModal(
+                                        false,
+                                    )
+                                }
+                            >
+                                Отмена
+                            </button>
+
+                            <button
+                                type="submit"
+                                className="button primary"
+                                disabled={
+                                    creating
+                                }
+                            >
+                                <Plus
+                                    size={17}
+                                />
+
+                                {creating
+                                    ? 'Создание...'
+                                    : 'Создать'}
+                            </button>
+                        </div>
+                    </form>
+                </ModalOverlay>
+            )}
+
+            {selectedUser && (
+                <ModalOverlay
+                    onClose={() =>
+                        setSelectedUser(null)
+                    }
+                >
+                    <div
+                        style={{
+                            ...modalStyle,
+                            width:
+                                'min(1050px, 96vw)',
+                        }}
+                    >
+                        <ModalHeader
+                            title={`Права: ${selectedUser.fullName}`}
+                            onClose={() =>
+                                setSelectedUser(
+                                    null,
+                                )
+                            }
+                        />
+
+                        <div
+                            style={{
+                                display:
+                                    'flex',
+                                justifyContent:
+                                    'space-between',
+                                gap: 16,
+                                alignItems:
+                                    'center',
+                                flexWrap:
+                                    'wrap',
+                                marginBottom: 18,
+                            }}
+                        >
+                            <div>
+                                <div
+                                    style={{
+                                        fontWeight:
+                                            700,
+                                    }}
+                                >
+                                    {getRoleLabel(
+                                        selectedUser.role,
+                                    )}
+                                </div>
+
+                                <div
+                                    style={{
+                                        color:
+                                            'var(--text-muted)',
+                                        marginTop:
+                                            4,
+                                    }}
+                                >
+                                    @
+                                    {
+                                        selectedUser.login
+                                    }
+                                </div>
+                            </div>
+
+                            {selectedUser.role !==
+                                'Administrator' && (
+                                    <div
+                                        style={{
+                                            display:
+                                                'flex',
+                                            gap: 8,
+                                            flexWrap:
+                                                'wrap',
+                                        }}
+                                    >
+                                        <button
+                                            type="button"
+                                            className="button secondary"
+                                            onClick={
+                                                enableEverything
+                                            }
+                                        >
+                                            Разрешить всё
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            className="button secondary"
+                                            onClick={
+                                                disableEverything
+                                            }
+                                        >
+                                            Снять всё
+                                        </button>
+                                    </div>
+                                )}
+                        </div>
+
+                        {selectedUser.role ===
+                            'Administrator' ? (
+                            <div
+                                style={{
+                                    ...messageStyle,
+                                    margin: 0,
+                                }}
+                            >
+                                Администратор имеет
+                                полный доступ ко всем
+                                категориям и операциям.
+                                Ограничить его права
+                                нельзя.
+                            </div>
+                        ) : loadingAccesses ? (
+                            <div
+                                style={
+                                    emptyStateStyle
+                                }
+                            >
+                                Загрузка прав...
+                            </div>
+                        ) : (
+                            <div
+                                style={{
+                                    overflowX:
+                                        'auto',
+                                }}
+                            >
+                                <table
+                                    style={
+                                        tableStyle
+                                    }
+                                >
+                                    <thead>
+                                        <tr>
+                                            <th
+                                                style={
+                                                    thStyle
+                                                }
+                                            >
+                                                Категория
+                                            </th>
+
+                                            <th
+                                                style={
+                                                    centerThStyle
+                                                }
+                                            >
+                                                Просмотр
+                                            </th>
+
+                                            <th
+                                                style={
+                                                    centerThStyle
+                                                }
+                                            >
+                                                Приход
+                                            </th>
+
+                                            <th
+                                                style={
+                                                    centerThStyle
+                                                }
+                                            >
+                                                Расход
+                                            </th>
+
+                                            <th
+                                                style={
+                                                    centerThStyle
+                                                }
+                                            >
+                                                Инвентаризация
+                                            </th>
+
+                                            <th
+                                                style={
+                                                    centerThStyle
+                                                }
+                                            >
+                                                Всё
+                                            </th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+                                        {accesses.map(
+                                            (
+                                                access,
+                                            ) => {
+                                                const allEnabled =
+                                                    access.canView &&
+                                                    access.canReceive &&
+                                                    access.canIssue &&
+                                                    access.canInventory;
+
+                                                return (
+                                                    <tr
+                                                        key={
+                                                            access.categoryId
+                                                        }
+                                                    >
+                                                        <td
+                                                            style={
+                                                                tdStyle
+                                                            }
+                                                        >
+                                                            <strong>
+                                                                {
+                                                                    access.categoryName
+                                                                }
+                                                            </strong>
+                                                        </td>
+
+                                                        <PermissionCell
+                                                            checked={
+                                                                access.canView
+                                                            }
+                                                            onChange={(
+                                                                value,
+                                                            ) =>
+                                                                updateAccess(
+                                                                    access.categoryId,
+                                                                    'canView',
+                                                                    value,
+                                                                )
+                                                            }
+                                                        />
+
+                                                        <PermissionCell
+                                                            checked={
+                                                                access.canReceive
+                                                            }
+                                                            onChange={(
+                                                                value,
+                                                            ) =>
+                                                                updateAccess(
+                                                                    access.categoryId,
+                                                                    'canReceive',
+                                                                    value,
+                                                                )
+                                                            }
+                                                        />
+
+                                                        <PermissionCell
+                                                            checked={
+                                                                access.canIssue
+                                                            }
+                                                            onChange={(
+                                                                value,
+                                                            ) =>
+                                                                updateAccess(
+                                                                    access.categoryId,
+                                                                    'canIssue',
+                                                                    value,
+                                                                )
+                                                            }
+                                                        />
+
+                                                        <PermissionCell
+                                                            checked={
+                                                                access.canInventory
+                                                            }
+                                                            onChange={(
+                                                                value,
+                                                            ) =>
+                                                                updateAccess(
+                                                                    access.categoryId,
+                                                                    'canInventory',
+                                                                    value,
+                                                                )
+                                                            }
+                                                        />
+
+                                                        <PermissionCell
+                                                            checked={
+                                                                allEnabled
+                                                            }
+                                                            onChange={(
+                                                                value,
+                                                            ) =>
+                                                                setAllForCategory(
+                                                                    access.categoryId,
+                                                                    value,
+                                                                )
+                                                            }
+                                                        />
+                                                    </tr>
+                                                );
+                                            },
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        <div
+                            style={
+                                modalFooterStyle
+                            }
+                        >
+                            <button
+                                type="button"
+                                className="button secondary"
+                                onClick={() =>
+                                    setSelectedUser(
+                                        null,
+                                    )
+                                }
+                            >
+                                Закрыть
+                            </button>
+
+                            {selectedUser.role !==
+                                'Administrator' && (
+                                    <button
+                                        type="button"
+                                        className="button primary"
+                                        onClick={
+                                            saveAccesses
+                                        }
+                                        disabled={
+                                            savingAccesses ||
+                                            loadingAccesses
+                                        }
+                                    >
+                                        <Save
+                                            size={
+                                                17
+                                            }
+                                        />
+
+                                        {savingAccesses
+                                            ? 'Сохранение...'
+                                            : 'Сохранить права'}
+                                    </button>
+                                )}
+                        </div>
+                    </div>
+                </ModalOverlay>
+            )}
         </div>
     );
 }
+
+function StatCard({
+    icon,
+    label,
+    value,
+}: {
+    icon: React.ReactNode;
+    label: string;
+    value: number;
+}) {
+    return (
+        <div style={statCardStyle}>
+            <div
+                style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 12,
+                    display: 'grid',
+                    placeItems: 'center',
+                    background:
+                        'rgba(255,255,255,.05)',
+                }}
+            >
+                {icon}
+            </div>
+
+            <div>
+                <div
+                    style={{
+                        fontSize: 13,
+                        color:
+                            'var(--text-muted)',
+                    }}
+                >
+                    {label}
+                </div>
+
+                <div
+                    style={{
+                        fontSize: 25,
+                        fontWeight: 800,
+                        marginTop: 3,
+                    }}
+                >
+                    {value}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function Field({
+    label,
+    value,
+    onChange,
+}: {
+    label: string;
+    value: string;
+    onChange: (value: string) => void;
+}) {
+    return (
+        <label style={fieldStyle}>
+            <span>{label}</span>
+
+            <input
+                value={value}
+                onChange={(event) =>
+                    onChange(
+                        event.target.value,
+                    )
+                }
+                style={inputStyle}
+            />
+        </label>
+    );
+}
+
+function PermissionCell({
+    checked,
+    onChange,
+}: {
+    checked: boolean;
+    onChange: (value: boolean) => void;
+}) {
+    return (
+        <td
+            style={{
+                ...tdStyle,
+                textAlign: 'center',
+            }}
+        >
+            <input
+                type="checkbox"
+                checked={checked}
+                onChange={(event) =>
+                    onChange(
+                        event.target.checked,
+                    )
+                }
+                style={{
+                    width: 18,
+                    height: 18,
+                    cursor: 'pointer',
+                    accentColor:
+                        '#60a5fa',
+                }}
+            />
+        </td>
+    );
+}
+
+function ModalOverlay({
+    children,
+    onClose,
+}: {
+    children: React.ReactNode;
+    onClose: () => void;
+}) {
+    return (
+        <div
+            style={overlayStyle}
+            onMouseDown={(event) => {
+                if (
+                    event.target ===
+                    event.currentTarget
+                ) {
+                    onClose();
+                }
+            }}
+        >
+            {children}
+        </div>
+    );
+}
+
+function ModalHeader({
+    title,
+    onClose,
+}: {
+    title: string;
+    onClose: () => void;
+}) {
+    return (
+        <div
+            style={{
+                display: 'flex',
+                justifyContent:
+                    'space-between',
+                alignItems: 'center',
+                gap: 16,
+                marginBottom: 22,
+            }}
+        >
+            <div>
+                <p
+                    className="eyebrow"
+                    style={{
+                        marginBottom: 5,
+                    }}
+                >
+                    ADMINISTRATION
+                </p>
+
+                <h2
+                    style={{
+                        margin: 0,
+                    }}
+                >
+                    {title}
+                </h2>
+            </div>
+
+            <button
+                type="button"
+                onClick={onClose}
+                style={iconButtonStyle}
+            >
+                <X size={19} />
+            </button>
+        </div>
+    );
+}
+
+function getRoleLabel(
+    role: string,
+) {
+    switch (role) {
+        case 'Administrator':
+            return 'Администратор';
+
+        case 'Printer':
+            return 'Печатник';
+
+        case 'PlotterOperator':
+            return 'Плоттерщик';
+
+        case 'Viewer':
+            return 'Наблюдатель';
+
+        default:
+            return role;
+    }
+}
+
+function formatDate(
+    value: string,
+) {
+    if (!value) {
+        return '—';
+    }
+
+    return new Date(
+        value,
+    ).toLocaleDateString('ru-RU');
+}
+
+const statsGrid: CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns:
+        'repeat(4, minmax(0, 1fr))',
+    gap: 14,
+    marginBottom: 18,
+};
+
+const statCardStyle: CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 14,
+    padding: 18,
+    borderRadius: 16,
+    border:
+        '1px solid rgba(255,255,255,.08)',
+    background:
+        'rgba(255,255,255,.025)',
+};
+
+const tableStyle: CSSProperties = {
+    width: '100%',
+    borderCollapse: 'collapse',
+    minWidth: 760,
+};
+
+const thStyle: CSSProperties = {
+    textAlign: 'left',
+    padding: '12px 14px',
+    fontSize: 12,
+    color: 'var(--text-muted)',
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: '.06em',
+    borderBottom:
+        '1px solid rgba(255,255,255,.08)',
+};
+
+const centerThStyle: CSSProperties = {
+    ...thStyle,
+    textAlign: 'center',
+};
+
+const tdStyle: CSSProperties = {
+    padding: '14px',
+    borderBottom:
+        '1px solid rgba(255,255,255,.06)',
+    verticalAlign: 'middle',
+};
+
+const inputStyle: CSSProperties = {
+    width: '100%',
+    minHeight: 42,
+    boxSizing: 'border-box',
+    borderRadius: 10,
+    border:
+        '1px solid rgba(255,255,255,.1)',
+    background:
+        'rgba(255,255,255,.04)',
+    color: 'inherit',
+    outline: 'none',
+    padding: '10px 12px',
+};
+
+const fieldStyle: CSSProperties = {
+    display: 'grid',
+    gap: 7,
+    fontWeight: 600,
+};
+
+const overlayStyle: CSSProperties = {
+    position: 'fixed',
+    inset: 0,
+    zIndex: 1000,
+    display: 'grid',
+    placeItems: 'center',
+    padding: 20,
+    background:
+        'rgba(0,0,0,.72)',
+    backdropFilter: 'blur(6px)',
+};
+
+const modalStyle: CSSProperties = {
+    width: 'min(620px, 96vw)',
+    maxHeight: '90vh',
+    overflowY: 'auto',
+    borderRadius: 18,
+    border:
+        '1px solid rgba(255,255,255,.1)',
+    background: '#111827',
+    padding: 22,
+    boxShadow:
+        '0 24px 80px rgba(0,0,0,.45)',
+};
+
+const modalFooterStyle: CSSProperties = {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 22,
+};
+
+const iconButtonStyle: CSSProperties = {
+    width: 38,
+    height: 38,
+    border: 0,
+    borderRadius: 10,
+    display: 'grid',
+    placeItems: 'center',
+    cursor: 'pointer',
+    color: 'inherit',
+    background:
+        'rgba(255,255,255,.06)',
+};
+
+const emptyStateStyle: CSSProperties = {
+    padding: 34,
+    textAlign: 'center',
+    color: 'var(--text-muted)',
+};
+
+const messageStyle: CSSProperties = {
+    padding: '13px 15px',
+    borderRadius: 12,
+    border:
+        '1px solid rgba(255,255,255,.1)',
+    marginBottom: 16,
+};
+
+const roleBadgeStyle: CSSProperties = {
+    display: 'inline-flex',
+    padding: '5px 9px',
+    borderRadius: 999,
+    background:
+        'rgba(96,165,250,.12)',
+    border:
+        '1px solid rgba(96,165,250,.2)',
+    fontSize: 12,
+    fontWeight: 700,
+};
+
+const statusBadgeStyle: CSSProperties = {
+    display: 'inline-flex',
+    padding: '5px 9px',
+    borderRadius: 999,
+    background:
+        'rgba(74,222,128,.1)',
+    border:
+        '1px solid rgba(74,222,128,.18)',
+    fontSize: 12,
+    fontWeight: 700,
+};

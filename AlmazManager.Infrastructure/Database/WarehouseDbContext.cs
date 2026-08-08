@@ -26,6 +26,9 @@ public sealed class WarehouseDbContext : DbContext
     public DbSet<AppUser> Users =>
         Set<AppUser>();
 
+    public DbSet<UserCategoryAccess> UserCategoryAccesses =>
+        Set<UserCategoryAccess>();
+
     public DbSet<WarehouseDocument> WarehouseDocuments =>
         Set<WarehouseDocument>();
 
