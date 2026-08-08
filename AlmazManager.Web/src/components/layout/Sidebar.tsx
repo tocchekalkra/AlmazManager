@@ -1,4 +1,10 @@
 import {
+    useEffect,
+    useMemo,
+    useState,
+} from 'react';
+
+import {
     ArrowDownToLine,
     ArrowUpFromLine,
     Boxes,
@@ -21,12 +27,23 @@ import {
     getUserFromToken,
 } from '../../auth/token';
 
+import api from '../../api/api';
+
+type CurrentUserAccess = {
+    canInventoryStandard: boolean;
+    canInventoryOracal: boolean;
+};
+
 type SidebarItem = {
     to: string;
     label: string;
     icon: typeof Gauge;
 
     administratorOnly?: boolean;
+
+    permission?:
+    | 'inventoryStandard'
+    | 'inventoryOracal';
 };
 
 type SidebarSection = {
@@ -70,6 +87,7 @@ const sections: SidebarSection[] = [
                 to: '/categories',
                 label: 'Категории',
                 icon: Layers3,
+
                 administratorOnly:
                     true,
             },
@@ -96,14 +114,24 @@ const sections: SidebarSection[] = [
                 to: '/inventory',
                 label:
                     'Инвентаризация склада',
-                icon: ClipboardCheck,
+
+                icon:
+                    ClipboardCheck,
+
+                permission:
+                    'inventoryStandard',
             },
 
             {
                 to: '/inventory/oracal',
                 label:
                     'Инвентаризация ORACAL',
-                icon: SwatchBook,
+
+                icon:
+                    SwatchBook,
+
+                permission:
+                    'inventoryOracal',
             },
         ],
     },
@@ -122,7 +150,9 @@ const sections: SidebarSection[] = [
                 to: '/operations',
                 label:
                     'Журнал операций',
-                icon: History,
+
+                icon:
+                    History,
             },
         ],
     },
@@ -136,14 +166,20 @@ const sections: SidebarSection[] = [
         items: [
             {
                 to: '/users',
-                label: 'Пользователи',
-                icon: Users,
+                label:
+                    'Пользователи',
+
+                icon:
+                    Users,
             },
 
             {
                 to: '/settings',
-                label: 'Настройки',
-                icon: Settings,
+                label:
+                    'Настройки',
+
+                icon:
+                    Settings,
             },
         ],
     },
@@ -166,30 +202,212 @@ export default function Sidebar() {
         user?.role ===
         'Administrator';
 
-    const visibleSections =
-        sections
-            .filter(
-                section =>
-                    !section.administratorOnly ||
-                    isAdministrator,
-            )
-            .map(
-                section => ({
-                    ...section,
+    const [
+        access,
+        setAccess,
+    ] =
+        useState<CurrentUserAccess>({
+            canInventoryStandard:
+                isAdministrator,
 
-                    items:
-                        section.items.filter(
-                            item =>
-                                !item.administratorOnly ||
-                                isAdministrator,
-                        ),
-                }),
-            )
-            .filter(
-                section =>
-                    section.items.length >
-                    0,
+            canInventoryOracal:
+                isAdministrator,
+        });
+
+    const [
+        accessLoaded,
+        setAccessLoaded,
+    ] =
+        useState(
+            isAdministrator,
+        );
+
+    useEffect(() => {
+        if (!token) {
+            setAccess({
+                canInventoryStandard:
+                    false,
+
+                canInventoryOracal:
+                    false,
+            });
+
+            setAccessLoaded(
+                true,
             );
+
+            return;
+        }
+
+        if (isAdministrator) {
+            setAccess({
+                canInventoryStandard:
+                    true,
+
+                canInventoryOracal:
+                    true,
+            });
+
+            setAccessLoaded(
+                true,
+            );
+
+            return;
+        }
+
+        let cancelled =
+            false;
+
+        async function loadAccess() {
+            try {
+                setAccessLoaded(
+                    false,
+                );
+
+                const response =
+                    await api.get<CurrentUserAccess>(
+                        '/users/me/access',
+                    );
+
+                if (cancelled) {
+                    return;
+                }
+
+                setAccess({
+                    canInventoryStandard:
+                        response.data
+                            .canInventoryStandard,
+
+                    canInventoryOracal:
+                        response.data
+                            .canInventoryOracal,
+                });
+            } catch (
+            requestError
+            ) {
+                console.error(
+                    'Не удалось загрузить права текущего пользователя:',
+                    requestError,
+                );
+
+                if (cancelled) {
+                    return;
+                }
+
+                /*
+                 * Если API прав недоступен,
+                 * безопаснее скрыть защищённые
+                 * пункты меню.
+                 */
+                setAccess({
+                    canInventoryStandard:
+                        false,
+
+                    canInventoryOracal:
+                        false,
+                });
+            } finally {
+                if (!cancelled) {
+                    setAccessLoaded(
+                        true,
+                    );
+                }
+            }
+        }
+
+        void loadAccess();
+
+        return () => {
+            cancelled =
+                true;
+        };
+    }, [
+        token,
+        isAdministrator,
+    ]);
+
+    function hasItemAccess(
+        item: SidebarItem,
+    ) {
+        if (
+            item.administratorOnly &&
+            !isAdministrator
+        ) {
+            return false;
+        }
+
+        if (
+            !item.permission
+        ) {
+            return true;
+        }
+
+        /*
+         * Администратор имеет
+         * полный доступ.
+         */
+        if (isAdministrator) {
+            return true;
+        }
+
+        /*
+         * Пока права загружаются,
+         * защищённые пункты не показываем.
+         */
+        if (!accessLoaded) {
+            return false;
+        }
+
+        if (
+            item.permission ===
+            'inventoryStandard'
+        ) {
+            return access
+                .canInventoryStandard;
+        }
+
+        if (
+            item.permission ===
+            'inventoryOracal'
+        ) {
+            return access
+                .canInventoryOracal;
+        }
+
+        return false;
+    }
+
+    const visibleSections =
+        useMemo(
+            () =>
+                sections
+                    .filter(
+                        section =>
+                            !section.administratorOnly ||
+                            isAdministrator,
+                    )
+                    .map(
+                        section => ({
+                            ...section,
+
+                            items:
+                                section.items.filter(
+                                    hasItemAccess,
+                                ),
+                        }),
+                    )
+                    .filter(
+                        section =>
+                            section.items.length >
+                            0,
+                    ),
+            [
+                isAdministrator,
+                accessLoaded,
+                access.canInventoryStandard,
+                access.canInventoryOracal,
+            ],
+        );
 
     return (
         <aside className="sidebar">
@@ -246,18 +464,10 @@ export default function Sidebar() {
                                             }
 
                                             /*
-                                             * ВАЖНО:
-                                             * end заставляет NavLink
-                                             * подсвечиваться только при
-                                             * точном совпадении маршрута.
-                                             *
-                                             * Поэтому:
+                                             * Точное совпадение маршрута.
                                              *
                                              * /inventory
-                                             *
-                                             * больше НЕ будет активным
-                                             * на:
-                                             *
+                                             * не подсвечивается на
                                              * /inventory/oracal
                                              */
                                             end

@@ -10,43 +10,60 @@ public sealed class UserCategoryAccessConfiguration
     public void Configure(
         EntityTypeBuilder<UserCategoryAccess> builder)
     {
-        builder.ToTable("UserCategoryAccesses");
+        builder.ToTable(
+            "UserCategoryAccesses");
 
-        builder.HasKey(x => x.Id);
+        builder.HasKey(
+            x => x.Id);
 
-        builder.Property(x => x.UserId)
+        builder.Property(
+                x => x.UserId)
             .IsRequired();
 
-        builder.Property(x => x.CategoryId)
+        builder.Property(
+                x => x.CategoryId)
             .IsRequired();
 
-        builder.Property(x => x.CanView)
+        builder.Property(
+                x => x.CanView)
             .IsRequired();
 
-        builder.Property(x => x.CanReceive)
+        builder.Property(
+                x => x.CanReceive)
             .IsRequired();
 
-        builder.Property(x => x.CanIssue)
+        builder.Property(
+                x => x.CanIssue)
             .IsRequired();
 
-        builder.Property(x => x.CanInventory)
+        builder.Property(
+                x => x.CanInventoryStandard)
             .IsRequired();
 
-        builder.HasIndex(x => new
-        {
-            x.UserId,
-            x.CategoryId
-        })
+        builder.Property(
+                x => x.CanInventoryOracal)
+            .IsRequired();
+
+        builder.HasIndex(
+                x => new
+                {
+                    x.UserId,
+                    x.CategoryId
+                })
             .IsUnique();
 
         builder.HasOne<AppUser>()
             .WithMany()
-            .HasForeignKey(x => x.UserId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .HasForeignKey(
+                x => x.UserId)
+            .OnDelete(
+                DeleteBehavior.Cascade);
 
         builder.HasOne<Category>()
             .WithMany()
-            .HasForeignKey(x => x.CategoryId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .HasForeignKey(
+                x => x.CategoryId)
+            .OnDelete(
+                DeleteBehavior.Cascade);
     }
 }

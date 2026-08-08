@@ -6,4 +6,5 @@ public sealed record UserCategoryAccessResponse(
     bool CanView,
     bool CanReceive,
     bool CanIssue,
-    bool CanInventory);
+    bool CanInventoryStandard,
+    bool CanInventoryOracal);

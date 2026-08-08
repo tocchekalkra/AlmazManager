@@ -83,8 +83,9 @@ public sealed class PostInventoryDocumentHandler
         }
 
         /*
-         * Сначала проверяем весь документ.
-         * До окончания проверки склад не меняем.
+         * Первый проход:
+         * ничего не меняем,
+         * только проверяем весь документ.
          */
         foreach (var item in document.Items)
         {
@@ -105,10 +106,16 @@ public sealed class PostInventoryDocumentHandler
                     $"Материал '{material.Name}' находится в архиве.");
             }
 
+            var permission =
+                material.Kind ==
+                MaterialKind.Oracal641
+                    ? CategoryPermission.InventoryOracal
+                    : CategoryPermission.InventoryStandard;
+
             await _categoryAccessService
                 .EnsureAccessAsync(
                     material.CategoryId,
-                    CategoryPermission.Inventory);
+                    permission);
 
             var stock =
                 await _stockRepository
@@ -118,11 +125,6 @@ public sealed class PostInventoryDocumentHandler
             var currentQuantity =
                 stock?.Quantity ?? 0;
 
-            /*
-             * Если после начала инвентаризации
-             * кто-то сделал приход/расход,
-             * запрещаем проведение старых цифр.
-             */
             if (currentQuantity !=
                 item.ExpectedQuantity)
             {
@@ -136,7 +138,7 @@ public sealed class PostInventoryDocumentHandler
         }
 
         /*
-         * После полной проверки
+         * Второй проход:
          * применяем фактические остатки.
          */
         foreach (var item in document.Items)
@@ -164,10 +166,6 @@ public sealed class PostInventoryDocumentHandler
                 item.ActualQuantity -
                 before;
 
-            /*
-             * Если расхождения нет,
-             * склад менять не нужно.
-             */
             if (change == 0)
             {
                 continue;
@@ -183,13 +181,7 @@ public sealed class PostInventoryDocumentHandler
                     before,
                     change,
                     stock.Quantity,
-
-                    /*
-                     * Кто реально провёл
-                     * инвентаризацию.
-                     */
                     _currentUserService.UserId,
-
                     document.Id,
                     false,
                     null,

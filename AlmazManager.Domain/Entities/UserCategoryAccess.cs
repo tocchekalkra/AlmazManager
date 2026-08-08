@@ -12,15 +12,18 @@ public sealed class UserCategoryAccess : BaseEntity
         bool canView,
         bool canReceive,
         bool canIssue,
-        bool canInventory)
+        bool canInventoryStandard,
+        bool canInventoryOracal)
     {
         ChangeUser(userId);
         ChangeCategory(categoryId);
+
         ChangePermissions(
             canView,
             canReceive,
             canIssue,
-            canInventory);
+            canInventoryStandard,
+            canInventoryOracal);
     }
 
     public Guid UserId { get; private set; }
@@ -33,9 +36,12 @@ public sealed class UserCategoryAccess : BaseEntity
 
     public bool CanIssue { get; private set; }
 
-    public bool CanInventory { get; private set; }
+    public bool CanInventoryStandard { get; private set; }
 
-    public void ChangeUser(Guid userId)
+    public bool CanInventoryOracal { get; private set; }
+
+    public void ChangeUser(
+        Guid userId)
     {
         if (userId == Guid.Empty)
         {
@@ -47,7 +53,8 @@ public sealed class UserCategoryAccess : BaseEntity
         UserId = userId;
     }
 
-    public void ChangeCategory(Guid categoryId)
+    public void ChangeCategory(
+        Guid categoryId)
     {
         if (categoryId == Guid.Empty)
         {
@@ -63,21 +70,34 @@ public sealed class UserCategoryAccess : BaseEntity
         bool canView,
         bool canReceive,
         bool canIssue,
-        bool canInventory)
+        bool canInventoryStandard,
+        bool canInventoryOracal)
     {
-        CanView = canView;
-        CanReceive = canReceive;
-        CanIssue = canIssue;
-        CanInventory = canInventory;
+        CanView =
+            canView;
+
+        CanReceive =
+            canReceive;
+
+        CanIssue =
+            canIssue;
+
+        CanInventoryStandard =
+            canInventoryStandard;
+
+        CanInventoryOracal =
+            canInventoryOracal;
     }
 
     public void Archive()
     {
-        IsActive = false;
+        IsActive =
+            false;
     }
 
     public void Restore()
     {
-        IsActive = true;
+        IsActive =
+            true;
     }
 }

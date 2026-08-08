@@ -1,15 +1,13 @@
 import {
     useEffect,
     useMemo,
-    useRef,
     useState,
     type CSSProperties,
     type FormEvent,
+    type ReactNode,
 } from 'react';
 
 import {
-    Check,
-    ChevronDown,
     Eye,
     EyeOff,
     KeyRound,
@@ -37,10 +35,13 @@ type UserItem = {
 type CategoryAccess = {
     categoryId: string;
     categoryName: string;
+
     canView: boolean;
     canReceive: boolean;
     canIssue: boolean;
-    canInventory: boolean;
+
+    canInventoryStandard: boolean;
+    canInventoryOracal: boolean;
 };
 
 type CreateUserForm = {
@@ -50,34 +51,12 @@ type CreateUserForm = {
     role: string;
 };
 
-type RoleOption = {
-    value: string;
-    label: string;
-    description: string;
-};
-
-const roleOptions: RoleOption[] = [
-    {
-        value: 'Administrator',
-        label: 'Администратор',
-        description: 'Полный доступ ко всей системе',
-    },
-    {
-        value: 'Printer',
-        label: 'Печатник',
-        description: 'Работа со складом по назначенным категориям',
-    },
-    {
-        value: 'PlotterOperator',
-        label: 'Плоттерщик',
-        description: 'Работа с назначенными категориями и Oracal',
-    },
-    {
-        value: 'Viewer',
-        label: 'Наблюдатель',
-        description: 'Только просмотр разрешённых данных',
-    },
-];
+type PermissionField =
+    | 'canView'
+    | 'canReceive'
+    | 'canIssue'
+    | 'canInventoryStandard'
+    | 'canInventoryOracal';
 
 const emptyCreateForm: CreateUserForm = {
     fullName: '',
@@ -106,7 +85,9 @@ export default function UsersPage() {
         useState(false);
 
     const [createForm, setCreateForm] =
-        useState<CreateUserForm>(emptyCreateForm);
+        useState<CreateUserForm>(
+            emptyCreateForm,
+        );
 
     const [creating, setCreating] =
         useState(false);
@@ -114,23 +95,28 @@ export default function UsersPage() {
     const [showPassword, setShowPassword] =
         useState(false);
 
-    const [roleDropdownOpen, setRoleDropdownOpen] =
-        useState(false);
-
     const [selectedUser, setSelectedUser] =
-        useState<UserItem | null>(null);
+        useState<UserItem | null>(
+            null,
+        );
 
     const [accesses, setAccesses] =
         useState<CategoryAccess[]>([]);
 
-    const [loadingAccesses, setLoadingAccesses] =
+    const [
+        loadingAccesses,
+        setLoadingAccesses,
+    ] =
         useState(false);
 
-    const [savingAccesses, setSavingAccesses] =
+    const [
+        savingAccesses,
+        setSavingAccesses,
+    ] =
         useState(false);
 
     useEffect(() => {
-        loadUsers();
+        void loadUsers();
     }, []);
 
     async function loadUsers() {
@@ -139,69 +125,87 @@ export default function UsersPage() {
             setError('');
 
             const response =
-                await api.get<UserItem[]>('/users');
+                await api.get<UserItem[]>(
+                    '/users',
+                );
 
-            setUsers(response.data ?? []);
-        } catch (requestError: any) {
+            setUsers(
+                response.data ?? [],
+            );
+        } catch (
+        requestError: any
+        ) {
             console.error(
                 'Ошибка загрузки пользователей:',
                 requestError,
             );
 
             setError(
-                requestError?.response?.data?.message ??
-                requestError?.response?.data?.title ??
-                'Не удалось загрузить пользователей.',
+                getApiError(
+                    requestError,
+                    'Не удалось загрузить пользователей.',
+                ),
             );
         } finally {
             setLoading(false);
         }
     }
 
-    const filteredUsers = useMemo(() => {
-        const query =
-            search.trim().toLowerCase();
+    const filteredUsers =
+        useMemo(() => {
+            const query =
+                search
+                    .trim()
+                    .toLowerCase();
 
-        if (!query) {
-            return users;
-        }
+            if (!query) {
+                return users;
+            }
 
-        return users.filter(
-            (user) =>
-                user.fullName
-                    .toLowerCase()
-                    .includes(query) ||
-
-                user.login
-                    .toLowerCase()
-                    .includes(query) ||
-
-                getRoleLabel(user.role)
-                    .toLowerCase()
-                    .includes(query),
-        );
-    }, [users, search]);
+            return users.filter(
+                user =>
+                    user.fullName
+                        .toLowerCase()
+                        .includes(query) ||
+                    user.login
+                        .toLowerCase()
+                        .includes(query) ||
+                    getRoleLabel(
+                        user.role,
+                    )
+                        .toLowerCase()
+                        .includes(query),
+            );
+        }, [
+            users,
+            search,
+        ]);
 
     const activeUsers =
         users.filter(
-            (user) => user.isActive,
+            user =>
+                user.isActive,
         ).length;
 
     const administrators =
         users.filter(
-            (user) =>
-                user.role === 'Administrator',
+            user =>
+                user.role ===
+                'Administrator',
         ).length;
 
     const workers =
         users.filter(
-            (user) =>
-                user.role === 'Printer' ||
-                user.role === 'PlotterOperator',
+            user =>
+                user.role ===
+                'Printer' ||
+                user.role ===
+                'PlotterOperator',
         ).length;
 
     async function handleCreateUser(
-        event: FormEvent<HTMLFormElement>,
+        event:
+            FormEvent<HTMLFormElement>,
     ) {
         event.preventDefault();
 
@@ -240,98 +244,112 @@ export default function UsersPage() {
                 },
             );
 
-            closeCreateModal();
+            setShowCreateModal(false);
+
+            setCreateForm(
+                emptyCreateForm,
+            );
+
+            setShowPassword(
+                false,
+            );
 
             setSuccess(
                 'Пользователь успешно создан.',
             );
 
             await loadUsers();
-        } catch (requestError: any) {
+        } catch (
+        requestError: any
+        ) {
             console.error(
                 'Ошибка создания пользователя:',
                 requestError,
             );
 
             setError(
-                requestError?.response?.data?.message ??
-                requestError?.response?.data?.title ??
-                'Не удалось создать пользователя.',
+                getApiError(
+                    requestError,
+                    'Не удалось создать пользователя.',
+                ),
             );
         } finally {
             setCreating(false);
         }
     }
 
-    function openCreateModal() {
-        setError('');
-        setSuccess('');
-
-        setCreateForm(emptyCreateForm);
-
-        setShowPassword(false);
-        setRoleDropdownOpen(false);
-        setShowCreateModal(true);
-    }
-
-    function closeCreateModal() {
-        setShowCreateModal(false);
-
-        setCreateForm(emptyCreateForm);
-
-        setShowPassword(false);
-        setRoleDropdownOpen(false);
-    }
-
     async function openAccessModal(
         user: UserItem,
     ) {
-        setSelectedUser(user);
+        setSelectedUser(
+            user,
+        );
+
         setAccesses([]);
 
         setError('');
         setSuccess('');
 
+        if (
+            user.role ===
+            'Administrator'
+        ) {
+            return;
+        }
+
         try {
-            setLoadingAccesses(true);
+            setLoadingAccesses(
+                true,
+            );
 
             const response =
-                await api.get<CategoryAccess[]>(
+                await api.get<
+                    CategoryAccess[]
+                >(
                     `/users/${user.id}/category-access`,
                 );
 
             setAccesses(
                 response.data ?? [],
             );
-        } catch (requestError: any) {
+        } catch (
+        requestError: any
+        ) {
             console.error(
                 'Ошибка загрузки прав:',
                 requestError,
             );
 
             setError(
-                requestError?.response?.data?.message ??
-                requestError?.response?.data?.title ??
-                'Не удалось загрузить права пользователя.',
+                getApiError(
+                    requestError,
+                    'Не удалось загрузить права пользователя.',
+                ),
             );
         } finally {
-            setLoadingAccesses(false);
+            setLoadingAccesses(
+                false,
+            );
         }
+    }
+
+    function closeAccessModal() {
+        setSelectedUser(
+            null,
+        );
+
+        setAccesses([]);
     }
 
     function updateAccess(
         categoryId: string,
-        field:
-            | 'canView'
-            | 'canReceive'
-            | 'canIssue'
-            | 'canInventory',
+        field: PermissionField,
         value: boolean,
     ) {
         setAccesses(
-            (current) =>
+            current =>
                 current.map(
-                    (access) => {
+                    access => {
                         if (
                             access.categoryId !==
                             categoryId
@@ -339,9 +357,16 @@ export default function UsersPage() {
                             return access;
                         }
 
+                        /*
+                         * Отключение просмотра
+                         * автоматически отключает
+                         * все рабочие действия.
+                         */
                         if (
-                            field === 'canView' &&
-                            value === false
+                            field ===
+                            'canView' &&
+                            value ===
+                            false
                         ) {
                             return {
                                 ...access,
@@ -355,14 +380,22 @@ export default function UsersPage() {
                                 canIssue:
                                     false,
 
-                                canInventory:
+                                canInventoryStandard:
+                                    false,
+
+                                canInventoryOracal:
                                     false,
                             };
                         }
 
+                        /*
+                         * Любое рабочее право
+                         * автоматически включает просмотр.
+                         */
                         if (
-                            field !== 'canView' &&
-                            value === true
+                            field !==
+                            'canView' &&
+                            value
                         ) {
                             return {
                                 ...access,
@@ -377,7 +410,9 @@ export default function UsersPage() {
 
                         return {
                             ...access,
-                            [field]: value,
+
+                            [field]:
+                                value,
                         };
                     },
                 ),
@@ -389,9 +424,9 @@ export default function UsersPage() {
         value: boolean,
     ) {
         setAccesses(
-            (current) =>
+            current =>
                 current.map(
-                    (access) =>
+                    access =>
                         access.categoryId ===
                             categoryId
                             ? {
@@ -406,7 +441,10 @@ export default function UsersPage() {
                                 canIssue:
                                     value,
 
-                                canInventory:
+                                canInventoryStandard:
+                                    value,
+
+                                canInventoryOracal:
                                     value,
                             }
                             : access,
@@ -416,9 +454,9 @@ export default function UsersPage() {
 
     function enableEverything() {
         setAccesses(
-            (current) =>
+            current =>
                 current.map(
-                    (access) => ({
+                    access => ({
                         ...access,
 
                         canView:
@@ -430,7 +468,10 @@ export default function UsersPage() {
                         canIssue:
                             true,
 
-                        canInventory:
+                        canInventoryStandard:
+                            true,
+
+                        canInventoryOracal:
                             true,
                     }),
                 ),
@@ -439,9 +480,9 @@ export default function UsersPage() {
 
     function disableEverything() {
         setAccesses(
-            (current) =>
+            current =>
                 current.map(
-                    (access) => ({
+                    access => ({
                         ...access,
 
                         canView:
@@ -453,7 +494,10 @@ export default function UsersPage() {
                         canIssue:
                             false,
 
-                        canInventory:
+                        canInventoryStandard:
+                            false,
+
+                        canInventoryOracal:
                             false,
                     }),
                 ),
@@ -473,7 +517,10 @@ export default function UsersPage() {
         }
 
         try {
-            setSavingAccesses(true);
+            setSavingAccesses(
+                true,
+            );
+
             setError('');
             setSuccess('');
 
@@ -482,7 +529,7 @@ export default function UsersPage() {
                 {
                     accesses:
                         accesses.map(
-                            (access) => ({
+                            access => ({
                                 categoryId:
                                     access.categoryId,
 
@@ -495,8 +542,11 @@ export default function UsersPage() {
                                 canIssue:
                                     access.canIssue,
 
-                                canInventory:
-                                    access.canInventory,
+                                canInventoryStandard:
+                                    access.canInventoryStandard,
+
+                                canInventoryOracal:
+                                    access.canInventoryOracal,
                             }),
                         ),
                 },
@@ -506,21 +556,25 @@ export default function UsersPage() {
                 `Права пользователя «${selectedUser.fullName}» сохранены.`,
             );
 
-            setSelectedUser(null);
-            setAccesses([]);
-        } catch (requestError: any) {
+            closeAccessModal();
+        } catch (
+        requestError: any
+        ) {
             console.error(
                 'Ошибка сохранения прав:',
                 requestError,
             );
 
             setError(
-                requestError?.response?.data?.message ??
-                requestError?.response?.data?.title ??
-                'Не удалось сохранить права пользователя.',
+                getApiError(
+                    requestError,
+                    'Не удалось сохранить права пользователя.',
+                ),
             );
         } finally {
-            setSavingAccesses(false);
+            setSavingAccesses(
+                false,
+            );
         }
     }
 
@@ -537,17 +591,27 @@ export default function UsersPage() {
                     </h1>
 
                     <p>
-                        Управление пользователями,
-                        ролями и доступом к категориям склада.
+                        Управление
+                        пользователями,
+                        ролями и правами
+                        доступа.
                     </p>
                 </div>
 
-                <div style={headingActionsStyle}>
+                <div
+                    style={
+                        styles.headingActions
+                    }
+                >
                     <button
                         type="button"
                         className="button secondary"
-                        onClick={loadUsers}
-                        disabled={loading}
+                        onClick={
+                            loadUsers
+                        }
+                        disabled={
+                            loading
+                        }
                     >
                         <RefreshCcw
                             size={17}
@@ -559,9 +623,23 @@ export default function UsersPage() {
                     <button
                         type="button"
                         className="button primary"
-                        onClick={openCreateModal}
+                        onClick={() => {
+                            setCreateForm(
+                                emptyCreateForm,
+                            );
+
+                            setShowPassword(
+                                false,
+                            );
+
+                            setShowCreateModal(
+                                true,
+                            );
+                        }}
                     >
-                        <Plus size={17} />
+                        <Plus
+                            size={17}
+                        />
 
                         Добавить пользователя
                     </button>
@@ -569,50 +647,36 @@ export default function UsersPage() {
             </div>
 
             {error && (
-                <div
-                    style={{
-                        ...messageStyle,
-
-                        borderColor:
-                            'rgba(248,113,113,.35)',
-
-                        background:
-                            'rgba(127,29,29,.18)',
-
-                        color:
-                            '#fca5a5',
-                    }}
+                <Message
+                    type="error"
                 >
                     {error}
-                </div>
+                </Message>
             )}
 
             {success && (
-                <div
-                    style={{
-                        ...messageStyle,
-
-                        borderColor:
-                            'rgba(74,222,128,.3)',
-
-                        background:
-                            'rgba(20,83,45,.18)',
-
-                        color:
-                            '#86efac',
-                    }}
+                <Message
+                    type="success"
                 >
                     {success}
-                </div>
+                </Message>
             )}
 
-            <div style={statsGrid}>
+            <section
+                style={
+                    styles.statsGrid
+                }
+            >
                 <StatCard
                     icon={
-                        <Users size={20} />
+                        <Users
+                            size={20}
+                        />
                     }
                     label="Всего пользователей"
-                    value={users.length}
+                    value={
+                        users.length
+                    }
                 />
 
                 <StatCard
@@ -622,7 +686,9 @@ export default function UsersPage() {
                         />
                     }
                     label="Активных"
-                    value={activeUsers}
+                    value={
+                        activeUsers
+                    }
                 />
 
                 <StatCard
@@ -632,7 +698,9 @@ export default function UsersPage() {
                         />
                     }
                     label="Администраторов"
-                    value={administrators}
+                    value={
+                        administrators
+                    }
                 />
 
                 <StatCard
@@ -641,120 +709,142 @@ export default function UsersPage() {
                             size={20}
                         />
                     }
-                    label="Печатников / плоттерщиков"
-                    value={workers}
+                    label="Сотрудников"
+                    value={
+                        workers
+                    }
                 />
-            </div>
+            </section>
 
             <section className="panel">
-                <div style={panelToolbarStyle}>
+                <div
+                    style={
+                        styles.toolbar
+                    }
+                >
                     <div>
                         <h2
                             style={{
-                                margin: 0,
+                                margin:
+                                    0,
                             }}
                         >
                             Пользователи системы
                         </h2>
 
                         <p
-                            style={{
-                                margin:
-                                    '6px 0 0',
-
-                                color:
-                                    '#7e8a98',
-
-                                fontSize:
-                                    12,
-                            }}
+                            style={
+                                styles.helper
+                            }
                         >
-                            Администратор может
-                            назначать права по каждой
-                            категории отдельно.
+                            Права назначаются
+                            отдельно для каждой
+                            категории материалов.
                         </p>
                     </div>
 
-                    <div style={searchWrapperStyle}>
+                    <div
+                        style={
+                            styles.searchBox
+                        }
+                    >
                         <Search
                             size={17}
-                            style={{
-                                position:
-                                    'absolute',
-
-                                left:
-                                    13,
-
-                                top:
-                                    '50%',
-
-                                transform:
-                                    'translateY(-50%)',
-
-                                opacity:
-                                    0.55,
-                            }}
                         />
 
                         <input
-                            value={search}
-                            onChange={(event) =>
-                                setSearch(
-                                    event.target.value,
-                                )
+                            value={
+                                search
+                            }
+                            onChange={
+                                event =>
+                                    setSearch(
+                                        event
+                                            .target
+                                            .value,
+                                    )
                             }
                             placeholder="Поиск по имени, логину или роли"
-                            style={{
-                                ...inputStyle,
-
-                                paddingLeft:
-                                    40,
-                            }}
+                            style={
+                                styles.searchInput
+                            }
                         />
                     </div>
                 </div>
 
                 {loading ? (
-                    <div style={emptyStateStyle}>
+                    <div
+                        style={
+                            styles.empty
+                        }
+                    >
                         Загрузка пользователей...
                     </div>
-                ) : filteredUsers.length === 0 ? (
-                    <div style={emptyStateStyle}>
+                ) : filteredUsers.length ===
+                    0 ? (
+                    <div
+                        style={
+                            styles.empty
+                        }
+                    >
                         Пользователи не найдены.
                     </div>
                 ) : (
                     <div
-                        style={{
-                            overflowX:
-                                'auto',
-                        }}
+                        style={
+                            styles.tableScroll
+                        }
                     >
-                        <table style={tableStyle}>
+                        <table
+                            style={
+                                styles.table
+                            }
+                        >
                             <thead>
                                 <tr>
-                                    <th style={thStyle}>
+                                    <th
+                                        style={
+                                            styles.th
+                                        }
+                                    >
                                         Пользователь
                                     </th>
 
-                                    <th style={thStyle}>
+                                    <th
+                                        style={
+                                            styles.th
+                                        }
+                                    >
                                         Логин
                                     </th>
 
-                                    <th style={thStyle}>
+                                    <th
+                                        style={
+                                            styles.th
+                                        }
+                                    >
                                         Роль
                                     </th>
 
-                                    <th style={thStyle}>
+                                    <th
+                                        style={
+                                            styles.th
+                                        }
+                                    >
                                         Статус
                                     </th>
 
-                                    <th style={thStyle}>
+                                    <th
+                                        style={
+                                            styles.th
+                                        }
+                                    >
                                         Создан
                                     </th>
 
                                     <th
                                         style={{
-                                            ...thStyle,
+                                            ...styles.th,
 
                                             textAlign:
                                                 'right',
@@ -767,13 +857,17 @@ export default function UsersPage() {
 
                             <tbody>
                                 {filteredUsers.map(
-                                    (user) => (
+                                    user => (
                                         <tr
                                             key={
                                                 user.id
                                             }
                                         >
-                                            <td style={tdStyle}>
+                                            <td
+                                                style={
+                                                    styles.td
+                                                }
+                                            >
                                                 <strong>
                                                     {
                                                         user.fullName
@@ -781,17 +875,25 @@ export default function UsersPage() {
                                                 </strong>
                                             </td>
 
-                                            <td style={tdStyle}>
+                                            <td
+                                                style={
+                                                    styles.td
+                                                }
+                                            >
                                                 @
                                                 {
                                                     user.login
                                                 }
                                             </td>
 
-                                            <td style={tdStyle}>
+                                            <td
+                                                style={
+                                                    styles.td
+                                                }
+                                            >
                                                 <span
                                                     style={
-                                                        roleBadgeStyle
+                                                        styles.roleBadge
                                                     }
                                                 >
                                                     {getRoleLabel(
@@ -800,16 +902,17 @@ export default function UsersPage() {
                                                 </span>
                                             </td>
 
-                                            <td style={tdStyle}>
+                                            <td
+                                                style={
+                                                    styles.td
+                                                }
+                                            >
                                                 <span
-                                                    style={{
-                                                        ...statusBadgeStyle,
-
-                                                        opacity:
-                                                            user.isActive
-                                                                ? 1
-                                                                : 0.5,
-                                                    }}
+                                                    style={
+                                                        user.isActive
+                                                            ? styles.activeBadge
+                                                            : styles.inactiveBadge
+                                                    }
                                                 >
                                                     {user.isActive
                                                         ? 'Активен'
@@ -817,7 +920,11 @@ export default function UsersPage() {
                                                 </span>
                                             </td>
 
-                                            <td style={tdStyle}>
+                                            <td
+                                                style={
+                                                    styles.td
+                                                }
+                                            >
                                                 {formatDate(
                                                     user.createdAtUtc,
                                                 )}
@@ -825,7 +932,7 @@ export default function UsersPage() {
 
                                             <td
                                                 style={{
-                                                    ...tdStyle,
+                                                    ...styles.td,
 
                                                     textAlign:
                                                         'right',
@@ -859,32 +966,34 @@ export default function UsersPage() {
             </section>
 
             {showCreateModal && (
-                <ModalOverlay
-                    onClose={
-                        closeCreateModal
+                <Modal
+                    onClose={() =>
+                        setShowCreateModal(
+                            false,
+                        )
                     }
                 >
                     <form
                         onSubmit={
                             handleCreateUser
                         }
-                        style={modalStyle}
+                        style={
+                            styles.modal
+                        }
                     >
                         <ModalHeader
                             title="Новый пользователь"
-                            onClose={
-                                closeCreateModal
+                            onClose={() =>
+                                setShowCreateModal(
+                                    false,
+                                )
                             }
                         />
 
                         <div
-                            style={{
-                                display:
-                                    'grid',
-
-                                gap:
-                                    18,
-                            }}
+                            style={
+                                styles.formGrid
+                            }
                         >
                             <Field
                                 label="ФИО / имя"
@@ -892,19 +1001,16 @@ export default function UsersPage() {
                                     createForm.fullName
                                 }
                                 placeholder="Например: Иван Петров"
-                                onChange={(
-                                    value,
-                                ) =>
-                                    setCreateForm(
-                                        (
-                                            current,
-                                        ) => ({
-                                            ...current,
+                                onChange={
+                                    value =>
+                                        setCreateForm(
+                                            current => ({
+                                                ...current,
 
-                                            fullName:
-                                                value,
-                                        }),
-                                    )
+                                                fullName:
+                                                    value,
+                                            }),
+                                        )
                                 }
                             />
 
@@ -914,30 +1020,31 @@ export default function UsersPage() {
                                     createForm.login
                                 }
                                 placeholder="Например: ivan"
-                                onChange={(
-                                    value,
-                                ) =>
-                                    setCreateForm(
-                                        (
-                                            current,
-                                        ) => ({
-                                            ...current,
+                                onChange={
+                                    value =>
+                                        setCreateForm(
+                                            current => ({
+                                                ...current,
 
-                                            login:
-                                                value,
-                                        }),
-                                    )
+                                                login:
+                                                    value,
+                                            }),
+                                        )
                                 }
                             />
 
-                            <label style={fieldStyle}>
+                            <label
+                                style={
+                                    styles.field
+                                }
+                            >
                                 <span>
                                     Пароль
                                 </span>
 
                                 <div
                                     style={
-                                        passwordWrapperStyle
+                                        styles.passwordBox
                                     }
                                 >
                                     <input
@@ -949,66 +1056,47 @@ export default function UsersPage() {
                                         value={
                                             createForm.password
                                         }
-                                        onChange={(
-                                            event,
-                                        ) =>
-                                            setCreateForm(
-                                                (
-                                                    current,
-                                                ) => ({
-                                                    ...current,
+                                        onChange={
+                                            event =>
+                                                setCreateForm(
+                                                    current => ({
+                                                        ...current,
 
-                                                    password:
-                                                        event
-                                                            .target
-                                                            .value,
-                                                }),
-                                            )
+                                                        password:
+                                                            event
+                                                                .target
+                                                                .value,
+                                                    }),
+                                                )
+                                        }
+                                        style={
+                                            styles.input
                                         }
                                         placeholder="Введите пароль"
-                                        autoComplete="new-password"
-                                        style={{
-                                            ...inputStyle,
-
-                                            paddingRight:
-                                                50,
-                                        }}
                                     />
 
                                     <button
                                         type="button"
+                                        style={
+                                            styles.eyeButton
+                                        }
                                         onClick={() =>
                                             setShowPassword(
-                                                (
-                                                    current,
-                                                ) =>
+                                                current =>
                                                     !current,
                                             )
-                                        }
-                                        style={
-                                            passwordToggleStyle
-                                        }
-                                        title={
-                                            showPassword
-                                                ? 'Скрыть пароль'
-                                                : 'Показать пароль'
-                                        }
-                                        aria-label={
-                                            showPassword
-                                                ? 'Скрыть пароль'
-                                                : 'Показать пароль'
                                         }
                                     >
                                         {showPassword ? (
                                             <EyeOff
                                                 size={
-                                                    19
+                                                    18
                                                 }
                                             />
                                         ) : (
                                             <Eye
                                                 size={
-                                                    19
+                                                    18
                                                 }
                                             />
                                         )}
@@ -1016,48 +1104,67 @@ export default function UsersPage() {
                                 </div>
                             </label>
 
-                            <label style={fieldStyle}>
+                            <label
+                                style={
+                                    styles.field
+                                }
+                            >
                                 <span>
                                     Роль
                                 </span>
 
-                                <RoleDropdown
+                                <select
                                     value={
                                         createForm.role
                                     }
-                                    isOpen={
-                                        roleDropdownOpen
-                                    }
-                                    onOpenChange={
-                                        setRoleDropdownOpen
-                                    }
-                                    onChange={(
-                                        role,
-                                    ) => {
-                                        setCreateForm(
-                                            (
-                                                current,
-                                            ) => ({
-                                                ...current,
+                                    onChange={
+                                        event =>
+                                            setCreateForm(
+                                                current => ({
+                                                    ...current,
 
-                                                role,
-                                            }),
-                                        );
+                                                    role:
+                                                        event
+                                                            .target
+                                                            .value,
+                                                }),
+                                            )
+                                    }
+                                    style={
+                                        styles.input
+                                    }
+                                >
+                                    <option value="Administrator">
+                                        Администратор
+                                    </option>
 
-                                        setRoleDropdownOpen(
-                                            false,
-                                        );
-                                    }}
-                                />
+                                    <option value="Printer">
+                                        Печатник
+                                    </option>
+
+                                    <option value="PlotterOperator">
+                                        Плоттерщик
+                                    </option>
+
+                                    <option value="Viewer">
+                                        Наблюдатель
+                                    </option>
+                                </select>
                             </label>
                         </div>
 
-                        <div style={modalFooterStyle}>
+                        <div
+                            style={
+                                styles.modalFooter
+                            }
+                        >
                             <button
                                 type="button"
                                 className="button secondary"
-                                onClick={
-                                    closeCreateModal
+                                onClick={() =>
+                                    setShowCreateModal(
+                                        false,
+                                    )
                                 }
                             >
                                 Отмена
@@ -1080,53 +1187,43 @@ export default function UsersPage() {
                             </button>
                         </div>
                     </form>
-                </ModalOverlay>
+                </Modal>
             )}
 
             {selectedUser && (
-                <ModalOverlay
-                    onClose={() =>
-                        setSelectedUser(null)
+                <Modal
+                    onClose={
+                        closeAccessModal
                     }
                 >
                     <div
-                        style={{
-                            ...modalStyle,
-
-                            width:
-                                'min(1050px, 96vw)',
-                        }}
+                        style={
+                            styles.accessModal
+                        }
                     >
                         <ModalHeader
                             title={`Права: ${selectedUser.fullName}`}
-                            onClose={() =>
-                                setSelectedUser(
-                                    null,
-                                )
+                            onClose={
+                                closeAccessModal
                             }
                         />
 
-                        <div style={accessHeaderStyle}>
+                        <div
+                            style={
+                                styles.accessToolbar
+                            }
+                        >
                             <div>
-                                <div
-                                    style={{
-                                        fontWeight:
-                                            700,
-                                    }}
-                                >
+                                <strong>
                                     {getRoleLabel(
                                         selectedUser.role,
                                     )}
-                                </div>
+                                </strong>
 
                                 <div
-                                    style={{
-                                        color:
-                                            '#7e8a98',
-
-                                        marginTop:
-                                            4,
-                                    }}
+                                    style={
+                                        styles.helper
+                                    }
                                 >
                                     @
                                     {
@@ -1138,16 +1235,9 @@ export default function UsersPage() {
                             {selectedUser.role !==
                                 'Administrator' && (
                                     <div
-                                        style={{
-                                            display:
-                                                'flex',
-
-                                            gap:
-                                                8,
-
-                                            flexWrap:
-                                                'wrap',
-                                        }}
+                                        style={
+                                            styles.accessActions
+                                        }
                                     >
                                         <button
                                             type="button"
@@ -1174,72 +1264,82 @@ export default function UsersPage() {
 
                         {selectedUser.role ===
                             'Administrator' ? (
-                            <div
-                                style={{
-                                    ...messageStyle,
-
-                                    margin:
-                                        0,
-
-                                    color:
-                                        '#cbd5e1',
-                                }}
-                            >
-                                Администратор имеет
-                                полный доступ ко всем
-                                категориям и операциям.
-                                Ограничить его права нельзя.
-                            </div>
+                            <Message type="info">
+                                Администратор
+                                имеет полный
+                                доступ ко всем
+                                категориям и
+                                операциям.
+                                Ограничить его
+                                права нельзя.
+                            </Message>
                         ) : loadingAccesses ? (
-                            <div style={emptyStateStyle}>
+                            <div
+                                style={
+                                    styles.empty
+                                }
+                            >
                                 Загрузка прав...
                             </div>
                         ) : (
                             <div
-                                style={{
-                                    overflowX:
-                                        'auto',
-                                }}
+                                style={
+                                    styles.tableScroll
+                                }
                             >
-                                <table style={tableStyle}>
+                                <table
+                                    style={{
+                                        ...styles.table,
+
+                                        minWidth:
+                                            1050,
+                                    }}
+                                >
                                     <thead>
                                         <tr>
-                                            <th style={thStyle}>
+                                            <th
+                                                style={
+                                                    styles.th
+                                                }
+                                            >
                                                 Категория
                                             </th>
 
-                                            <th style={centerThStyle}>
+                                            <PermissionHeader>
                                                 Просмотр
-                                            </th>
+                                            </PermissionHeader>
 
-                                            <th style={centerThStyle}>
+                                            <PermissionHeader>
                                                 Приход
-                                            </th>
+                                            </PermissionHeader>
 
-                                            <th style={centerThStyle}>
+                                            <PermissionHeader>
                                                 Расход
-                                            </th>
+                                            </PermissionHeader>
 
-                                            <th style={centerThStyle}>
-                                                Инвентаризация
-                                            </th>
+                                            <PermissionHeader>
+                                                Инв. склада
+                                            </PermissionHeader>
 
-                                            <th style={centerThStyle}>
+                                            <PermissionHeader>
+                                                Инв. ORACAL
+                                            </PermissionHeader>
+
+                                            <PermissionHeader>
                                                 Всё
-                                            </th>
+                                            </PermissionHeader>
                                         </tr>
                                     </thead>
 
                                     <tbody>
                                         {accesses.map(
-                                            (
-                                                access,
-                                            ) => {
+                                            access => {
                                                 const allEnabled =
                                                     access.canView &&
                                                     access.canReceive &&
                                                     access.canIssue &&
-                                                    access.canInventory;
+                                                    access.canInventoryStandard &&
+                                                    access.canInventoryOracal;
 
                                                 return (
                                                     <tr
@@ -1249,7 +1349,7 @@ export default function UsersPage() {
                                                     >
                                                         <td
                                                             style={
-                                                                tdStyle
+                                                                styles.td
                                                             }
                                                         >
                                                             <strong>
@@ -1263,14 +1363,13 @@ export default function UsersPage() {
                                                             checked={
                                                                 access.canView
                                                             }
-                                                            onChange={(
-                                                                value,
-                                                            ) =>
-                                                                updateAccess(
-                                                                    access.categoryId,
-                                                                    'canView',
-                                                                    value,
-                                                                )
+                                                            onChange={
+                                                                value =>
+                                                                    updateAccess(
+                                                                        access.categoryId,
+                                                                        'canView',
+                                                                        value,
+                                                                    )
                                                             }
                                                         />
 
@@ -1278,14 +1377,13 @@ export default function UsersPage() {
                                                             checked={
                                                                 access.canReceive
                                                             }
-                                                            onChange={(
-                                                                value,
-                                                            ) =>
-                                                                updateAccess(
-                                                                    access.categoryId,
-                                                                    'canReceive',
-                                                                    value,
-                                                                )
+                                                            onChange={
+                                                                value =>
+                                                                    updateAccess(
+                                                                        access.categoryId,
+                                                                        'canReceive',
+                                                                        value,
+                                                                    )
                                                             }
                                                         />
 
@@ -1293,29 +1391,41 @@ export default function UsersPage() {
                                                             checked={
                                                                 access.canIssue
                                                             }
-                                                            onChange={(
-                                                                value,
-                                                            ) =>
-                                                                updateAccess(
-                                                                    access.categoryId,
-                                                                    'canIssue',
-                                                                    value,
-                                                                )
+                                                            onChange={
+                                                                value =>
+                                                                    updateAccess(
+                                                                        access.categoryId,
+                                                                        'canIssue',
+                                                                        value,
+                                                                    )
                                                             }
                                                         />
 
                                                         <PermissionCell
                                                             checked={
-                                                                access.canInventory
+                                                                access.canInventoryStandard
                                                             }
-                                                            onChange={(
-                                                                value,
-                                                            ) =>
-                                                                updateAccess(
-                                                                    access.categoryId,
-                                                                    'canInventory',
-                                                                    value,
-                                                                )
+                                                            onChange={
+                                                                value =>
+                                                                    updateAccess(
+                                                                        access.categoryId,
+                                                                        'canInventoryStandard',
+                                                                        value,
+                                                                    )
+                                                            }
+                                                        />
+
+                                                        <PermissionCell
+                                                            checked={
+                                                                access.canInventoryOracal
+                                                            }
+                                                            onChange={
+                                                                value =>
+                                                                    updateAccess(
+                                                                        access.categoryId,
+                                                                        'canInventoryOracal',
+                                                                        value,
+                                                                    )
                                                             }
                                                         />
 
@@ -1323,13 +1433,12 @@ export default function UsersPage() {
                                                             checked={
                                                                 allEnabled
                                                             }
-                                                            onChange={(
-                                                                value,
-                                                            ) =>
-                                                                setAllForCategory(
-                                                                    access.categoryId,
-                                                                    value,
-                                                                )
+                                                            onChange={
+                                                                value =>
+                                                                    setAllForCategory(
+                                                                        access.categoryId,
+                                                                        value,
+                                                                    )
                                                             }
                                                         />
                                                     </tr>
@@ -1341,14 +1450,16 @@ export default function UsersPage() {
                             </div>
                         )}
 
-                        <div style={modalFooterStyle}>
+                        <div
+                            style={
+                                styles.modalFooter
+                            }
+                        >
                             <button
                                 type="button"
                                 className="button secondary"
-                                onClick={() =>
-                                    setSelectedUser(
-                                        null,
-                                    )
+                                onClick={
+                                    closeAccessModal
                                 }
                             >
                                 Закрыть
@@ -1359,18 +1470,16 @@ export default function UsersPage() {
                                     <button
                                         type="button"
                                         className="button primary"
-                                        onClick={
-                                            saveAccesses
-                                        }
                                         disabled={
                                             savingAccesses ||
                                             loadingAccesses
                                         }
+                                        onClick={
+                                            saveAccesses
+                                        }
                                     >
                                         <Save
-                                            size={
-                                                17
-                                            }
+                                            size={17}
                                         />
 
                                         {savingAccesses
@@ -1380,253 +1489,66 @@ export default function UsersPage() {
                                 )}
                         </div>
                     </div>
-                </ModalOverlay>
+                </Modal>
             )}
         </div>
     );
 }
 
-function RoleDropdown({
-    value,
-    isOpen,
-    onOpenChange,
+function PermissionHeader({
+    children,
+}: {
+    children: ReactNode;
+}) {
+    return (
+        <th
+            style={{
+                ...styles.th,
+
+                textAlign:
+                    'center',
+            }}
+        >
+            {children}
+        </th>
+    );
+}
+
+function PermissionCell({
+    checked,
     onChange,
 }: {
-    value: string;
-    isOpen: boolean;
-    onOpenChange: (value: boolean) => void;
-    onChange: (value: string) => void;
+    checked: boolean;
+    onChange:
+    (value: boolean) => void;
 }) {
-    const wrapperRef =
-        useRef<HTMLDivElement | null>(
-            null,
-        );
-
-    const selected =
-        roleOptions.find(
-            (option) =>
-                option.value === value,
-        ) ?? roleOptions[1];
-
-    useEffect(() => {
-        function handleMouseDown(
-            event: MouseEvent,
-        ) {
-            if (
-                wrapperRef.current &&
-                !wrapperRef.current.contains(
-                    event.target as Node,
-                )
-            ) {
-                onOpenChange(false);
-            }
-        }
-
-        document.addEventListener(
-            'mousedown',
-            handleMouseDown,
-        );
-
-        return () =>
-            document.removeEventListener(
-                'mousedown',
-                handleMouseDown,
-            );
-    }, [onOpenChange]);
-
     return (
-        <div
-            ref={wrapperRef}
-            style={dropdownWrapperStyle}
+        <td
+            style={{
+                ...styles.td,
+
+                textAlign:
+                    'center',
+            }}
         >
-            <button
-                type="button"
-                onClick={() =>
-                    onOpenChange(!isOpen)
+            <input
+                type="checkbox"
+                checked={
+                    checked
                 }
-                style={{
-                    ...dropdownButtonStyle,
-
-                    borderColor:
-                        isOpen
-                            ? '#3b82f6'
-                            : '#303a49',
-
-                    boxShadow:
-                        isOpen
-                            ? '0 0 0 3px rgba(59,130,246,.10)'
-                            : 'none',
-                }}
-            >
-                <div
-                    style={{
-                        minWidth:
-                            0,
-
-                        textAlign:
-                            'left',
-                    }}
-                >
-                    <div
-                        style={{
-                            color:
-                                '#f8fafc',
-
-                            fontWeight:
-                                700,
-
-                            fontSize:
-                                14,
-                        }}
-                    >
-                        {selected.label}
-                    </div>
-
-                    <div
-                        style={{
-                            color:
-                                '#78879a',
-
-                            fontSize:
-                                11,
-
-                            marginTop:
-                                3,
-
-                            whiteSpace:
-                                'nowrap',
-
-                            overflow:
-                                'hidden',
-
-                            textOverflow:
-                                'ellipsis',
-                        }}
-                    >
-                        {
-                            selected.description
-                        }
-                    </div>
-                </div>
-
-                <ChevronDown
-                    size={19}
-                    style={{
-                        flex:
-                            '0 0 auto',
-
-                        color:
-                            '#8fa0b5',
-
-                        transform:
-                            isOpen
-                                ? 'rotate(180deg)'
-                                : 'rotate(0deg)',
-
-                        transition:
-                            'transform .16s ease',
-                    }}
-                />
-            </button>
-
-            {isOpen && (
-                <div style={dropdownMenuStyle}>
-                    {roleOptions.map(
-                        (option) => {
-                            const isSelected =
-                                option.value ===
-                                value;
-
-                            return (
-                                <button
-                                    key={
-                                        option.value
-                                    }
-                                    type="button"
-                                    onClick={() =>
-                                        onChange(
-                                            option.value,
-                                        )
-                                    }
-                                    style={{
-                                        ...dropdownOptionStyle,
-
-                                        background:
-                                            isSelected
-                                                ? 'rgba(59,130,246,.14)'
-                                                : 'transparent',
-
-                                        borderColor:
-                                            isSelected
-                                                ? 'rgba(59,130,246,.22)'
-                                                : 'transparent',
-                                    }}
-                                >
-                                    <div
-                                        style={{
-                                            minWidth:
-                                                0,
-
-                                            textAlign:
-                                                'left',
-                                        }}
-                                    >
-                                        <div
-                                            style={{
-                                                color:
-                                                    '#f1f5f9',
-
-                                                fontWeight:
-                                                    700,
-
-                                                fontSize:
-                                                    13,
-                                            }}
-                                        >
-                                            {
-                                                option.label
-                                            }
-                                        </div>
-
-                                        <div
-                                            style={{
-                                                color:
-                                                    '#718096',
-
-                                                fontSize:
-                                                    11,
-
-                                                marginTop:
-                                                    3,
-                                            }}
-                                        >
-                                            {
-                                                option.description
-                                            }
-                                        </div>
-                                    </div>
-
-                                    {isSelected && (
-                                        <Check
-                                            size={
-                                                18
-                                            }
-                                            style={{
-                                                color:
-                                                    '#60a5fa',
-
-                                                flex:
-                                                    '0 0 auto',
-                                            }}
-                                        />
-                                    )}
-                                </button>
-                            );
-                        },
-                    )}
-                </div>
-            )}
-        </div>
+                onChange={
+                    event =>
+                        onChange(
+                            event
+                                .target
+                                .checked,
+                        )
+                }
+                style={
+                    styles.checkbox
+                }
+            />
+        </td>
     );
 }
 
@@ -1635,22 +1557,38 @@ function StatCard({
     label,
     value,
 }: {
-    icon: React.ReactNode;
+    icon: ReactNode;
     label: string;
     value: number;
 }) {
     return (
-        <div style={statCardStyle}>
-            <div style={statIconStyle}>
+        <div
+            style={
+                styles.statCard
+            }
+        >
+            <div
+                style={
+                    styles.statIcon
+                }
+            >
                 {icon}
             </div>
 
             <div>
-                <div style={statLabelStyle}>
+                <div
+                    style={
+                        styles.statLabel
+                    }
+                >
                     {label}
                 </div>
 
-                <div style={statValueStyle}>
+                <div
+                    style={
+                        styles.statValue
+                    }
+                >
                     {value}
                 </div>
             </div>
@@ -1667,88 +1605,64 @@ function Field({
     label: string;
     value: string;
     placeholder?: string;
-    onChange: (value: string) => void;
+    onChange:
+    (value: string) => void;
 }) {
     return (
-        <label style={fieldStyle}>
+        <label
+            style={
+                styles.field
+            }
+        >
             <span>
                 {label}
             </span>
 
             <input
-                value={value}
-                placeholder={placeholder}
-                onChange={(event) =>
-                    onChange(
-                        event.target.value,
-                    )
+                value={
+                    value
                 }
-                style={inputStyle}
+                placeholder={
+                    placeholder
+                }
+                onChange={
+                    event =>
+                        onChange(
+                            event
+                                .target
+                                .value,
+                        )
+                }
+                style={
+                    styles.input
+                }
             />
         </label>
     );
 }
 
-function PermissionCell({
-    checked,
-    onChange,
-}: {
-    checked: boolean;
-    onChange: (value: boolean) => void;
-}) {
-    return (
-        <td
-            style={{
-                ...tdStyle,
-
-                textAlign:
-                    'center',
-            }}
-        >
-            <input
-                type="checkbox"
-                checked={checked}
-                onChange={(event) =>
-                    onChange(
-                        event.target.checked,
-                    )
-                }
-                style={{
-                    width:
-                        18,
-
-                    height:
-                        18,
-
-                    cursor:
-                        'pointer',
-
-                    accentColor:
-                        '#3b82f6',
-                }}
-            />
-        </td>
-    );
-}
-
-function ModalOverlay({
+function Modal({
     children,
     onClose,
 }: {
-    children: React.ReactNode;
+    children: ReactNode;
     onClose: () => void;
 }) {
     return (
         <div
-            style={overlayStyle}
-            onMouseDown={(event) => {
-                if (
-                    event.target ===
-                    event.currentTarget
-                ) {
-                    onClose();
+            style={
+                styles.overlay
+            }
+            onMouseDown={
+                event => {
+                    if (
+                        event.target ===
+                        event.currentTarget
+                    ) {
+                        onClose();
+                    }
                 }
-            }}
+            }
         >
             {children}
         </div>
@@ -1763,7 +1677,11 @@ function ModalHeader({
     onClose: () => void;
 }) {
     return (
-        <div style={modalHeaderStyle}>
+        <div
+            style={
+                styles.modalHeader
+            }
+        >
             <div>
                 <p
                     className="eyebrow"
@@ -1779,12 +1697,6 @@ function ModalHeader({
                     style={{
                         margin:
                             0,
-
-                        fontSize:
-                            24,
-
-                        color:
-                            '#f8fafc',
                     }}
                 >
                     {title}
@@ -1793,12 +1705,63 @@ function ModalHeader({
 
             <button
                 type="button"
-                onClick={onClose}
-                style={iconButtonStyle}
+                style={
+                    styles.closeButton
+                }
+                onClick={
+                    onClose
+                }
             >
-                <X size={20} />
+                <X
+                    size={20}
+                />
             </button>
         </div>
+    );
+}
+
+function Message({
+    type,
+    children,
+}: {
+    type:
+    | 'error'
+    | 'success'
+    | 'info';
+
+    children:
+    ReactNode;
+}) {
+    const typeStyle =
+        type === 'error'
+            ? styles.errorMessage
+            : type === 'success'
+                ? styles.successMessage
+                : styles.infoMessage;
+
+    return (
+        <div
+            style={{
+                ...styles.message,
+
+                ...typeStyle,
+            }}
+        >
+            {children}
+        </div>
+    );
+}
+
+function getApiError(
+    error: any,
+    fallback: string,
+) {
+    return (
+        error?.response?.data
+            ?.message ??
+        error?.response?.data
+            ?.title ??
+        fallback
     );
 }
 
@@ -1837,604 +1800,652 @@ function formatDate(
     );
 }
 
-const headingActionsStyle: CSSProperties = {
-    display:
-        'flex',
+const styles: Record<
+    string,
+    CSSProperties
+> = {
+    headingActions: {
+        display:
+            'flex',
 
-    gap:
-        10,
+        gap:
+            10,
 
-    flexWrap:
-        'wrap',
-};
+        flexWrap:
+            'wrap',
+    },
 
-const statsGrid: CSSProperties = {
-    display:
-        'grid',
+    statsGrid: {
+        display:
+            'grid',
 
-    gridTemplateColumns:
-        'repeat(4, minmax(0, 1fr))',
+        gridTemplateColumns:
+            'repeat(4, minmax(0, 1fr))',
 
-    gap:
-        14,
+        gap:
+            14,
 
-    marginBottom:
-        18,
-};
+        marginBottom:
+            18,
+    },
 
-const statCardStyle: CSSProperties = {
-    display:
-        'flex',
+    statCard: {
+        display:
+            'flex',
 
-    alignItems:
-        'center',
+        alignItems:
+            'center',
 
-    gap:
-        14,
+        gap:
+            14,
 
-    padding:
-        18,
+        padding:
+            18,
 
-    borderRadius:
-        14,
+        borderRadius:
+            14,
 
-    border:
-        '1px solid #222b35',
+        border:
+            '1px solid #222b35',
 
-    background:
-        'linear-gradient(145deg, rgba(19,26,35,.96), rgba(12,17,23,.96))',
-};
+        background:
+            'linear-gradient(145deg, rgba(19,26,35,.96), rgba(12,17,23,.96))',
+    },
 
-const statIconStyle: CSSProperties = {
-    width:
-        42,
+    statIcon: {
+        width:
+            42,
 
-    height:
-        42,
+        height:
+            42,
 
-    borderRadius:
-        12,
+        display:
+            'grid',
 
-    display:
-        'grid',
+        placeItems:
+            'center',
 
-    placeItems:
-        'center',
+        borderRadius:
+            12,
 
-    background:
-        'rgba(255,255,255,.05)',
+        background:
+            'rgba(255,255,255,.05)',
 
-    color:
-        '#8eb9ff',
-};
+        color:
+            '#8eb9ff',
+    },
 
-const statLabelStyle: CSSProperties = {
-    fontSize:
-        12,
+    statLabel: {
+        color:
+            '#8b98a8',
 
-    color:
-        '#8b98a8',
-};
+        fontSize:
+            12,
+    },
 
-const statValueStyle: CSSProperties = {
-    fontSize:
-        25,
+    statValue: {
+        marginTop:
+            3,
 
-    fontWeight:
-        800,
+        color:
+            '#f8fafc',
 
-    marginTop:
-        3,
+        fontSize:
+            25,
 
-    color:
-        '#f8fafc',
-};
+        fontWeight:
+            800,
+    },
 
-const panelToolbarStyle: CSSProperties = {
-    display:
-        'flex',
+    toolbar: {
+        display:
+            'flex',
 
-    justifyContent:
-        'space-between',
+        justifyContent:
+            'space-between',
 
-    alignItems:
-        'center',
+        alignItems:
+            'center',
 
-    gap:
-        16,
+        gap:
+            16,
 
-    flexWrap:
-        'wrap',
+        flexWrap:
+            'wrap',
 
-    padding:
-        18,
+        padding:
+            18,
 
-    borderBottom:
-        '1px solid rgba(255,255,255,.06)',
-};
+        borderBottom:
+            '1px solid rgba(255,255,255,.06)',
+    },
 
-const searchWrapperStyle: CSSProperties = {
-    position:
-        'relative',
+    helper: {
+        margin:
+            '5px 0 0',
 
-    minWidth:
-        300,
-};
+        color:
+            '#7e8a98',
 
-const tableStyle: CSSProperties = {
-    width:
-        '100%',
+        fontSize:
+            11,
+    },
 
-    borderCollapse:
-        'collapse',
+    searchBox: {
+        minWidth:
+            300,
 
-    minWidth:
-        760,
-};
+        minHeight:
+            42,
 
-const thStyle: CSSProperties = {
-    textAlign:
-        'left',
+        display:
+            'flex',
 
-    padding:
-        '12px 14px',
+        alignItems:
+            'center',
 
-    fontSize:
-        11,
+        gap:
+            8,
 
-    color:
-        '#7e8a98',
+        padding:
+            '0 12px',
 
-    fontWeight:
-        700,
+        border:
+            '1px solid #303a49',
 
-    textTransform:
-        'uppercase',
+        borderRadius:
+            10,
 
-    letterSpacing:
-        '.06em',
+        background:
+            '#111922',
+    },
 
-    borderBottom:
-        '1px solid rgba(255,255,255,.08)',
-};
+    searchInput: {
+        flex:
+            1,
 
-const centerThStyle: CSSProperties = {
-    ...thStyle,
+        border:
+            0,
 
-    textAlign:
-        'center',
-};
+        outline:
+            0,
 
-const tdStyle: CSSProperties = {
-    padding:
-        '14px',
+        background:
+            'transparent',
 
-    borderBottom:
-        '1px solid rgba(255,255,255,.06)',
+        color:
+            '#fff',
+    },
 
-    verticalAlign:
-        'middle',
+    tableScroll: {
+        overflowX:
+            'auto',
+    },
 
-    color:
-        '#d9e1ea',
+    table: {
+        width:
+            '100%',
 
-    fontSize:
-        13,
-};
+        minWidth:
+            760,
 
-const inputStyle: CSSProperties = {
-    width:
-        '100%',
+        borderCollapse:
+            'collapse',
+    },
 
-    minHeight:
-        52,
+    th: {
+        padding:
+            '12px 14px',
 
-    boxSizing:
-        'border-box',
+        borderBottom:
+            '1px solid rgba(255,255,255,.08)',
 
-    borderRadius:
-        11,
+        color:
+            '#7e8a98',
 
-    border:
-        '1px solid #303a49',
+        textAlign:
+            'left',
 
-    background:
-        '#1a2332',
+        fontSize:
+            10,
 
-    color:
-        '#f8fafc',
+        fontWeight:
+            800,
 
-    outline:
-        'none',
+        textTransform:
+            'uppercase',
 
-    padding:
-        '12px 15px',
+        letterSpacing:
+            '.04em',
 
-    fontSize:
-        14,
-};
+        whiteSpace:
+            'nowrap',
+    },
 
-const fieldStyle: CSSProperties = {
-    display:
-        'grid',
+    td: {
+        padding:
+            14,
 
-    gap:
-        8,
+        borderBottom:
+            '1px solid rgba(255,255,255,.06)',
 
-    fontWeight:
-        700,
+        color:
+            '#d9e1ea',
 
-    color:
-        '#e5e7eb',
+        fontSize:
+            13,
 
-    fontSize:
-        14,
-};
+        verticalAlign:
+            'middle',
+    },
 
-const passwordWrapperStyle: CSSProperties = {
-    position:
-        'relative',
+    roleBadge: {
+        display:
+            'inline-flex',
 
-    display:
-        'flex',
+        padding:
+            '5px 9px',
 
-    alignItems:
-        'center',
-};
+        borderRadius:
+            999,
 
-const passwordToggleStyle: CSSProperties = {
-    position:
-        'absolute',
+        background:
+            'rgba(96,165,250,.12)',
 
-    right:
-        8,
+        border:
+            '1px solid rgba(96,165,250,.2)',
 
-    width:
-        38,
+        color:
+            '#bfdbfe',
 
-    height:
-        38,
+        fontSize:
+            11,
 
-    display:
-        'grid',
+        fontWeight:
+            700,
+    },
 
-    placeItems:
-        'center',
+    activeBadge: {
+        display:
+            'inline-flex',
 
-    border:
-        'none',
+        padding:
+            '5px 9px',
 
-    borderRadius:
-        9,
+        borderRadius:
+            999,
 
-    background:
-        'transparent',
+        background:
+            'rgba(74,222,128,.1)',
 
-    color:
-        '#91a0b2',
+        color:
+            '#86efac',
 
-    cursor:
-        'pointer',
-};
+        fontSize:
+            11,
+    },
 
-const dropdownWrapperStyle: CSSProperties = {
-    position:
-        'relative',
+    inactiveBadge: {
+        display:
+            'inline-flex',
 
-    width:
-        '100%',
-};
+        padding:
+            '5px 9px',
 
-const dropdownButtonStyle: CSSProperties = {
-    width:
-        '100%',
+        borderRadius:
+            999,
 
-    minHeight:
-        58,
+        background:
+            'rgba(148,163,184,.08)',
 
-    padding:
-        '10px 14px',
+        color:
+            '#94a3b8',
 
-    display:
-        'flex',
+        fontSize:
+            11,
+    },
 
-    alignItems:
-        'center',
+    empty: {
+        padding:
+            34,
 
-    justifyContent:
-        'space-between',
+        textAlign:
+            'center',
 
-    gap:
-        15,
+        color:
+            '#7e8a98',
+    },
 
-    border:
-        '1px solid #303a49',
+    overlay: {
+        position:
+            'fixed',
 
-    borderRadius:
-        11,
+        inset:
+            0,
 
-    background:
-        '#1a2332',
+        zIndex:
+            1000,
 
-    color:
-        '#f8fafc',
+        display:
+            'grid',
 
-    cursor:
-        'pointer',
+        placeItems:
+            'center',
 
-    transition:
-        'border-color .16s ease, box-shadow .16s ease, background .16s ease',
-};
+        padding:
+            20,
 
-const dropdownMenuStyle: CSSProperties = {
-    position:
-        'absolute',
+        background:
+            'rgba(0,0,0,.72)',
 
-    top:
-        'calc(100% + 8px)',
+        backdropFilter:
+            'blur(7px)',
+    },
 
-    left:
-        0,
+    modal: {
+        width:
+            'min(650px, 96vw)',
 
-    right:
-        0,
+        maxHeight:
+            '90vh',
 
-    zIndex:
-        1200,
+        overflowY:
+            'auto',
 
-    padding:
-        7,
+        padding:
+            24,
 
-    border:
-        '1px solid #303b4b',
+        border:
+            '1px solid #263245',
 
-    borderRadius:
-        12,
+        borderRadius:
+            20,
 
-    background:
-        '#111a27',
+        background:
+            '#111a2a',
 
-    boxShadow:
-        '0 20px 50px rgba(0,0,0,.5)',
-};
+        boxShadow:
+            '0 30px 100px rgba(0,0,0,.55)',
+    },
 
-const dropdownOptionStyle: CSSProperties = {
-    width:
-        '100%',
+    accessModal: {
+        width:
+            'min(1180px, 96vw)',
 
-    display:
-        'flex',
+        maxHeight:
+            '90vh',
 
-    alignItems:
-        'center',
+        overflowY:
+            'auto',
 
-    justifyContent:
-        'space-between',
+        padding:
+            24,
 
-    gap:
-        15,
+        border:
+            '1px solid #263245',
 
-    padding:
-        '11px 12px',
+        borderRadius:
+            20,
 
-    border:
-        '1px solid transparent',
+        background:
+            '#111a2a',
 
-    borderRadius:
-        9,
+        boxShadow:
+            '0 30px 100px rgba(0,0,0,.55)',
+    },
 
-    color:
-        '#f8fafc',
+    modalHeader: {
+        display:
+            'flex',
 
-    cursor:
-        'pointer',
-};
+        alignItems:
+            'center',
 
-const overlayStyle: CSSProperties = {
-    position:
-        'fixed',
+        justifyContent:
+            'space-between',
 
-    inset:
-        0,
+        gap:
+            16,
 
-    zIndex:
-        1000,
+        marginBottom:
+            22,
+    },
 
-    display:
-        'grid',
+    closeButton: {
+        width:
+            42,
 
-    placeItems:
-        'center',
+        height:
+            42,
 
-    padding:
-        20,
+        display:
+            'grid',
 
-    background:
-        'rgba(0,0,0,.72)',
+        placeItems:
+            'center',
 
-    backdropFilter:
-        'blur(7px)',
-};
+        border:
+            '1px solid rgba(255,255,255,.05)',
 
-const modalStyle: CSSProperties = {
-    width:
-        'min(650px, 96vw)',
+        borderRadius:
+            10,
 
-    maxHeight:
-        '90vh',
+        background:
+            'rgba(255,255,255,.06)',
 
-    overflowY:
-        'auto',
+        color:
+            '#d8e0ea',
 
-    borderRadius:
-        20,
+        cursor:
+            'pointer',
+    },
 
-    border:
-        '1px solid #263245',
+    formGrid: {
+        display:
+            'grid',
 
-    background:
-        '#111a2a',
+        gap:
+            17,
+    },
 
-    padding:
-        24,
+    field: {
+        display:
+            'grid',
 
-    boxShadow:
-        '0 30px 100px rgba(0,0,0,.55)',
-};
+        gap:
+            8,
 
-const modalHeaderStyle: CSSProperties = {
-    display:
-        'flex',
+        color:
+            '#e5e7eb',
 
-    justifyContent:
-        'space-between',
+        fontSize:
+            13,
 
-    alignItems:
-        'center',
+        fontWeight:
+            700,
+    },
 
-    gap:
-        16,
+    input: {
+        width:
+            '100%',
 
-    marginBottom:
-        24,
-};
+        minHeight:
+            50,
 
-const modalFooterStyle: CSSProperties = {
-    display:
-        'flex',
+        boxSizing:
+            'border-box',
 
-    justifyContent:
-        'flex-end',
+        padding:
+            '11px 14px',
 
-    gap:
-        10,
+        border:
+            '1px solid #303a49',
 
-    marginTop:
-        24,
-};
+        borderRadius:
+            10,
 
-const accessHeaderStyle: CSSProperties = {
-    display:
-        'flex',
+        background:
+            '#1a2332',
 
-    justifyContent:
-        'space-between',
+        color:
+            '#f8fafc',
 
-    gap:
-        16,
+        outline:
+            0,
+    },
 
-    alignItems:
-        'center',
+    passwordBox: {
+        position:
+            'relative',
+    },
 
-    flexWrap:
-        'wrap',
+    eyeButton: {
+        position:
+            'absolute',
 
-    marginBottom:
-        18,
-};
+        top:
+            '50%',
 
-const iconButtonStyle: CSSProperties = {
-    width:
-        42,
+        right:
+            8,
 
-    height:
-        42,
+        transform:
+            'translateY(-50%)',
 
-    border:
-        '1px solid rgba(255,255,255,.04)',
+        width:
+            36,
 
-    borderRadius:
-        11,
+        height:
+            36,
 
-    display:
-        'grid',
+        display:
+            'grid',
 
-    placeItems:
-        'center',
+        placeItems:
+            'center',
 
-    cursor:
-        'pointer',
+        border:
+            0,
 
-    color:
-        '#d8e0ea',
+        borderRadius:
+            8,
 
-    background:
-        'rgba(255,255,255,.06)',
-};
+        background:
+            'transparent',
 
-const emptyStateStyle: CSSProperties = {
-    padding:
-        34,
+        color:
+            '#91a0b2',
 
-    textAlign:
-        'center',
+        cursor:
+            'pointer',
+    },
 
-    color:
-        '#7e8a98',
-};
+    modalFooter: {
+        display:
+            'flex',
 
-const messageStyle: CSSProperties = {
-    padding:
-        '13px 15px',
+        justifyContent:
+            'flex-end',
 
-    borderRadius:
-        12,
+        gap:
+            10,
 
-    border:
-        '1px solid rgba(255,255,255,.1)',
+        flexWrap:
+            'wrap',
 
-    marginBottom:
-        16,
-};
+        marginTop:
+            22,
+    },
 
-const roleBadgeStyle: CSSProperties = {
-    display:
-        'inline-flex',
+    accessToolbar: {
+        display:
+            'flex',
 
-    padding:
-        '5px 9px',
+        justifyContent:
+            'space-between',
 
-    borderRadius:
-        999,
+        alignItems:
+            'center',
 
-    background:
-        'rgba(96,165,250,.12)',
+        gap:
+            15,
 
-    border:
-        '1px solid rgba(96,165,250,.2)',
+        flexWrap:
+            'wrap',
 
-    color:
-        '#bfdbfe',
+        marginBottom:
+            18,
+    },
 
-    fontSize:
-        12,
+    accessActions: {
+        display:
+            'flex',
 
-    fontWeight:
-        700,
-};
+        gap:
+            8,
 
-const statusBadgeStyle: CSSProperties = {
-    display:
-        'inline-flex',
+        flexWrap:
+            'wrap',
+    },
 
-    padding:
-        '5px 9px',
+    checkbox: {
+        width:
+            18,
 
-    borderRadius:
-        999,
+        height:
+            18,
 
-    background:
-        'rgba(74,222,128,.1)',
+        cursor:
+            'pointer',
 
-    border:
-        '1px solid rgba(74,222,128,.18)',
+        accentColor:
+            '#3b82f6',
+    },
 
-    color:
-        '#86efac',
+    message: {
+        padding:
+            '13px 15px',
 
-    fontSize:
-        12,
+        marginBottom:
+            16,
 
-    fontWeight:
-        700,
+        borderRadius:
+            11,
+
+        border:
+            '1px solid rgba(255,255,255,.1)',
+    },
+
+    errorMessage: {
+        borderColor:
+            'rgba(248,113,113,.35)',
+
+        background:
+            'rgba(127,29,29,.18)',
+
+        color:
+            '#fca5a5',
+    },
+
+    successMessage: {
+        borderColor:
+            'rgba(74,222,128,.3)',
+
+        background:
+            'rgba(20,83,45,.18)',
+
+        color:
+            '#86efac',
+    },
+
+    infoMessage: {
+        borderColor:
+            'rgba(96,165,250,.22)',
+
+        background:
+            'rgba(30,64,175,.10)',
+
+        color:
+            '#bfdbfe',
+    },
 };

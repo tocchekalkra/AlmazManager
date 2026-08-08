@@ -3,6 +3,7 @@ using AlmazManager.Application.Interfaces;
 using AlmazManager.Application.Security;
 using AlmazManager.Contracts.Responses.InventoryDocuments;
 using AlmazManager.Domain.Entities;
+using AlmazManager.Domain.Enums;
 using AlmazManager.Domain.Interfaces;
 
 namespace AlmazManager.Application.Features.InventoryDocuments.Handlers;
@@ -125,10 +126,21 @@ public sealed class CreateInventoryDocumentHandler
                     $"Материал '{material.Name}' находится в архиве.");
             }
 
+            /*
+             * Для ORACAL используется отдельное право.
+             * Для остальных материалов —
+             * право инвентаризации основного склада.
+             */
+            var permission =
+                material.Kind ==
+                MaterialKind.Oracal641
+                    ? CategoryPermission.InventoryOracal
+                    : CategoryPermission.InventoryStandard;
+
             await _categoryAccessService
                 .EnsureAccessAsync(
                     material.CategoryId,
-                    CategoryPermission.Inventory);
+                    permission);
 
             var stock =
                 await _stockRepository

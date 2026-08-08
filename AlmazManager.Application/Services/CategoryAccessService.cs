@@ -65,8 +65,11 @@ public sealed class CategoryAccessService
             CategoryPermission.Issue =>
                 access.CanIssue,
 
-            CategoryPermission.Inventory =>
-                access.CanInventory,
+            CategoryPermission.InventoryStandard =>
+                access.CanInventoryStandard,
+
+            CategoryPermission.InventoryOracal =>
+                access.CanInventoryOracal,
 
             _ => false
         };
@@ -104,8 +107,6 @@ public sealed class CategoryAccessService
                 UserRole.Administrator.ToString(),
                 StringComparison.OrdinalIgnoreCase))
         {
-            // null означает:
-            // администратору разрешены все категории.
             return null;
         }
 
@@ -140,8 +141,11 @@ public sealed class CategoryAccessService
             CategoryPermission.Issue =>
                 access.CanIssue,
 
-            CategoryPermission.Inventory =>
-                access.CanInventory,
+            CategoryPermission.InventoryStandard =>
+                access.CanInventoryStandard,
+
+            CategoryPermission.InventoryOracal =>
+                access.CanInventoryOracal,
 
             _ => false
         };
@@ -161,8 +165,11 @@ public sealed class CategoryAccessService
             CategoryPermission.Issue =>
                 "У вас нет права выполнять расход для этой категории.",
 
-            CategoryPermission.Inventory =>
-                "У вас нет права выполнять инвентаризацию этой категории.",
+            CategoryPermission.InventoryStandard =>
+                "У вас нет права выполнять инвентаризацию основного склада для этой категории.",
+
+            CategoryPermission.InventoryOracal =>
+                "У вас нет права выполнять инвентаризацию ORACAL для этой категории.",
 
             _ =>
                 "Недостаточно прав для выполнения операции."

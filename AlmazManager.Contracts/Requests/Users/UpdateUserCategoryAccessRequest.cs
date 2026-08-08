@@ -5,4 +5,5 @@ public sealed record UpdateUserCategoryAccessRequest(
     bool CanView,
     bool CanReceive,
     bool CanIssue,
-    bool CanInventory);
+    bool CanInventoryStandard,
+    bool CanInventoryOracal);

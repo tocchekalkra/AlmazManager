@@ -7,8 +7,12 @@ namespace AlmazManager.Application.Features.Users.Handlers;
 
 public sealed class UpdateUserCategoryAccessesHandler
 {
-    private readonly IUserRepository _userRepository;
-    private readonly ICategoryRepository _categoryRepository;
+    private readonly IUserRepository
+        _userRepository;
+
+    private readonly ICategoryRepository
+        _categoryRepository;
+
     private readonly IUserCategoryAccessRepository
         _accessRepository;
 
@@ -17,9 +21,14 @@ public sealed class UpdateUserCategoryAccessesHandler
         ICategoryRepository categoryRepository,
         IUserCategoryAccessRepository accessRepository)
     {
-        _userRepository = userRepository;
-        _categoryRepository = categoryRepository;
-        _accessRepository = accessRepository;
+        _userRepository =
+            userRepository;
+
+        _categoryRepository =
+            categoryRepository;
+
+        _accessRepository =
+            accessRepository;
     }
 
     public async Task HandleAsync(
@@ -27,18 +36,21 @@ public sealed class UpdateUserCategoryAccessesHandler
         UpdateUserCategoryAccessesRequest request)
     {
         var user =
-            await _userRepository.GetByIdAsync(userId)
+            await _userRepository
+                .GetByIdAsync(userId)
             ?? throw new InvalidOperationException(
                 "Пользователь не найден.");
 
-        if (user.Role == UserRole.Administrator)
+        if (user.Role ==
+            UserRole.Administrator)
         {
             throw new InvalidOperationException(
                 "Права администратора нельзя ограничивать.");
         }
 
         var categories =
-            await _categoryRepository.GetAllAsync();
+            await _categoryRepository
+                .GetAllAsync();
 
         var categoryIds =
             categories
@@ -77,7 +89,8 @@ public sealed class UpdateUserCategoryAccessesHandler
                 requestedAccess.CanView ||
                 requestedAccess.CanReceive ||
                 requestedAccess.CanIssue ||
-                requestedAccess.CanInventory;
+                requestedAccess.CanInventoryStandard ||
+                requestedAccess.CanInventoryOracal;
 
             if (!hasAnyPermission)
             {
@@ -90,13 +103,16 @@ public sealed class UpdateUserCategoryAccessesHandler
                 continue;
             }
 
-            // Любое рабочее действие автоматически
-            // подразумевает право просмотра категории.
+            /*
+             * Любое рабочее право автоматически
+             * подразумевает право просмотра категории.
+             */
             var canView =
                 requestedAccess.CanView ||
                 requestedAccess.CanReceive ||
                 requestedAccess.CanIssue ||
-                requestedAccess.CanInventory;
+                requestedAccess.CanInventoryStandard ||
+                requestedAccess.CanInventoryOracal;
 
             if (existing is null)
             {
@@ -107,9 +123,11 @@ public sealed class UpdateUserCategoryAccessesHandler
                         canView,
                         requestedAccess.CanReceive,
                         requestedAccess.CanIssue,
-                        requestedAccess.CanInventory);
+                        requestedAccess.CanInventoryStandard,
+                        requestedAccess.CanInventoryOracal);
 
-                await _accessRepository.AddAsync(access);
+                await _accessRepository
+                    .AddAsync(access);
             }
             else
             {
@@ -117,15 +135,18 @@ public sealed class UpdateUserCategoryAccessesHandler
                     canView,
                     requestedAccess.CanReceive,
                     requestedAccess.CanIssue,
-                    requestedAccess.CanInventory);
+                    requestedAccess.CanInventoryStandard,
+                    requestedAccess.CanInventoryOracal);
 
                 await _accessRepository
                     .UpdateAsync(existing);
             }
         }
 
-        // Категории, которые вообще не пришли в запросе,
-        // также считаем отключёнными.
+        /*
+         * Если категория вообще не пришла
+         * в запросе — доступ к ней удаляем.
+         */
         var requestedCategoryIds =
             request.Accesses
                 .Select(x => x.CategoryId)
@@ -145,6 +166,7 @@ public sealed class UpdateUserCategoryAccessesHandler
             }
         }
 
-        await _accessRepository.SaveChangesAsync();
+        await _accessRepository
+            .SaveChangesAsync();
     }
 }

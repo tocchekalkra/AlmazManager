@@ -6,8 +6,12 @@ namespace AlmazManager.Application.Features.Users.Handlers;
 
 public sealed class GetUserCategoryAccessesHandler
 {
-    private readonly IUserRepository _userRepository;
-    private readonly ICategoryRepository _categoryRepository;
+    private readonly IUserRepository
+        _userRepository;
+
+    private readonly ICategoryRepository
+        _categoryRepository;
+
     private readonly IUserCategoryAccessRepository
         _accessRepository;
 
@@ -16,68 +20,97 @@ public sealed class GetUserCategoryAccessesHandler
         ICategoryRepository categoryRepository,
         IUserCategoryAccessRepository accessRepository)
     {
-        _userRepository = userRepository;
-        _categoryRepository = categoryRepository;
-        _accessRepository = accessRepository;
+        _userRepository =
+            userRepository;
+
+        _categoryRepository =
+            categoryRepository;
+
+        _accessRepository =
+            accessRepository;
     }
 
     public async Task<List<UserCategoryAccessResponse>>
         HandleAsync(Guid userId)
     {
         var user =
-            await _userRepository.GetByIdAsync(userId)
+            await _userRepository
+                .GetByIdAsync(userId)
             ?? throw new InvalidOperationException(
                 "Пользователь не найден.");
 
         var categories =
-            await _categoryRepository.GetAllAsync();
+            await _categoryRepository
+                .GetAllAsync();
 
         var existingAccesses =
-            await _accessRepository.GetByUserIdAsync(userId);
+            await _accessRepository
+                .GetByUserIdAsync(userId);
 
         var accessMap =
-            existingAccesses.ToDictionary(
-                x => x.CategoryId);
+            existingAccesses
+                .ToDictionary(
+                    x => x.CategoryId);
 
         var isAdministrator =
-            user.Role == UserRole.Administrator;
+            user.Role ==
+            UserRole.Administrator;
 
         return categories
-            .OrderBy(x => x.Name)
-            .Select(category =>
-            {
-                if (isAdministrator)
+            .OrderBy(
+                x => x.Name)
+            .Select(
+                category =>
                 {
+                    /*
+                     * Администратор всегда
+                     * получает все права.
+                     */
+                    if (isAdministrator)
+                    {
+                        return new UserCategoryAccessResponse(
+                            category.Id,
+                            category.Name,
+                            true,
+                            true,
+                            true,
+                            true,
+                            true);
+                    }
+
+                    /*
+                     * Если права на категорию
+                     * уже существуют —
+                     * возвращаем их.
+                     */
+                    if (accessMap.TryGetValue(
+                            category.Id,
+                            out var access))
+                    {
+                        return new UserCategoryAccessResponse(
+                            category.Id,
+                            category.Name,
+                            access.CanView,
+                            access.CanReceive,
+                            access.CanIssue,
+                            access.CanInventoryStandard,
+                            access.CanInventoryOracal);
+                    }
+
+                    /*
+                     * Если запись доступа
+                     * отсутствует —
+                     * все права выключены.
+                     */
                     return new UserCategoryAccessResponse(
                         category.Id,
                         category.Name,
-                        true,
-                        true,
-                        true,
-                        true);
-                }
-
-                if (accessMap.TryGetValue(
-                        category.Id,
-                        out var access))
-                {
-                    return new UserCategoryAccessResponse(
-                        category.Id,
-                        category.Name,
-                        access.CanView,
-                        access.CanReceive,
-                        access.CanIssue,
-                        access.CanInventory);
-                }
-
-                return new UserCategoryAccessResponse(
-                    category.Id,
-                    category.Name,
-                    false,
-                    false,
-                    false,
-                    false);
-            })
+                        false,
+                        false,
+                        false,
+                        false,
+                        false);
+                })
             .ToList();
     }
 }
