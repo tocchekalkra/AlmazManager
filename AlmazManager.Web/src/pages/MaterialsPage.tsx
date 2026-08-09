@@ -22,6 +22,8 @@ import {
 } from 'lucide-react';
 
 import api from '../api/api';
+import { loadAllMaterialCatalogItems } from '../api/catalog';
+import { useAuth } from '../auth/AuthContext';
 
 type MaterialCatalogItem = {
     id: string;
@@ -40,14 +42,6 @@ type MaterialCatalogItem = {
     colorCode?: string | null;
     colorName?: string | null;
     colorHex?: string | null;
-};
-
-type MaterialCatalogResponse = {
-    page: number;
-    pageSize: number;
-    totalCount: number;
-    totalPages: number;
-    items: MaterialCatalogItem[];
 };
 
 type Category = {
@@ -301,6 +295,9 @@ const numberFormatter =
     );
 
 export default function MaterialsPage() {
+    const { user } = useAuth();
+    const isAdministrator = user?.role === 'Administrator';
+
     const [materials, setMaterials] =
         useState<MaterialCatalogItem[]>([]);
 
@@ -372,12 +369,10 @@ export default function MaterialsPage() {
             setError('');
 
             const [
-                materialsResponse,
+                materialItems,
                 categoriesResponse,
             ] = await Promise.all([
-                api.get<MaterialCatalogResponse>(
-                    '/materials/catalog?pageSize=100',
-                ),
+                loadAllMaterialCatalogItems<MaterialCatalogItem>(),
 
                 api.get<Category[]>(
                     '/categories',
@@ -385,9 +380,7 @@ export default function MaterialsPage() {
             ]);
 
             setMaterials(
-                materialsResponse
-                    .data
-                    .items ?? [],
+                materialItems,
             );
 
             setCategories(
@@ -1513,39 +1506,35 @@ export default function MaterialsPage() {
                     </p>
                 </div>
 
-                <div
-                    style={
-                        styles.headingActions
-                    }
-                >
-                    <button
-                        type="button"
-                        className="button secondary"
-                        onClick={
-                            openCreateOracal
+                {isAdministrator && (
+                    <div
+                        style={
+                            styles.headingActions
                         }
                     >
-                        <Palette
-                            size={17}
-                        />
+                        <button
+                            type="button"
+                            className="button secondary"
+                            onClick={
+                                openCreateOracal
+                            }
+                        >
+                            <Palette size={17} />
+                            Добавить ORACAL
+                        </button>
 
-                        Добавить ORACAL
-                    </button>
-
-                    <button
-                        type="button"
-                        className="button primary"
-                        onClick={
-                            openCreate
-                        }
-                    >
-                        <Plus
-                            size={17}
-                        />
-
-                        Добавить материал
-                    </button>
-                </div>
+                        <button
+                            type="button"
+                            className="button primary"
+                            onClick={
+                                openCreate
+                            }
+                        >
+                            <Plus size={17} />
+                            Добавить материал
+                        </button>
+                    </div>
+                )}
             </div>
 
             <section className="stats-grid">
@@ -1811,7 +1800,9 @@ export default function MaterialsPage() {
                                     )
                                 }
                                 onEdit={
-                                    openEdit
+                                    isAdministrator
+                                        ? openEdit
+                                        : undefined
                                 }
                             />
                         ),
@@ -1861,19 +1852,18 @@ export default function MaterialsPage() {
                         </p>
                     </div>
 
-                    <button
-                        type="button"
-                        className="button primary"
-                        onClick={
-                            openCreateOracal
-                        }
-                    >
-                        <Plus
-                            size={17}
-                        />
-
-                        Добавить цвет
-                    </button>
+                    {isAdministrator && (
+                        <button
+                            type="button"
+                            className="button primary"
+                            onClick={
+                                openCreateOracal
+                            }
+                        >
+                            <Plus size={17} />
+                            Добавить цвет
+                        </button>
+                    )}
                 </div>
 
                 <div className="table-wrapper">
@@ -1954,7 +1944,9 @@ export default function MaterialsPage() {
                                                         row.width100
                                                     }
                                                     onEdit={
-                                                        openEdit
+                                                        isAdministrator
+                                                            ? openEdit
+                                                            : undefined
                                                     }
                                                 />
                                             </td>
@@ -1965,7 +1957,9 @@ export default function MaterialsPage() {
                                                         row.width127
                                                     }
                                                     onEdit={
-                                                        openEdit
+                                                        isAdministrator
+                                                            ? openEdit
+                                                            : undefined
                                                     }
                                                 />
                                             </td>
@@ -1997,7 +1991,7 @@ export default function MaterialsPage() {
                 </div>
             </section>
 
-            {formOpen && (
+            {isAdministrator && formOpen && (
                 <div
                     style={
                         styles.overlay
@@ -2787,7 +2781,7 @@ function StandardMaterialGroupCard({
     group: StandardMaterialGroup;
     expanded: boolean;
     onToggle: () => void;
-    onEdit: (
+    onEdit?: (
         material: MaterialCatalogItem,
     ) => void;
 }) {
@@ -2899,21 +2893,19 @@ function StandardMaterialGroupCard({
                                     шт.
                                 </div>
 
-                                <button
-                                    type="button"
-                                    style={
-                                        styles.iconButton
-                                    }
-                                    onClick={() =>
-                                        onEdit(
-                                            material,
-                                        )
-                                    }
-                                >
-                                    <Edit3
-                                        size={16}
-                                    />
-                                </button>
+                                {onEdit && (
+                                    <button
+                                        type="button"
+                                        style={
+                                            styles.iconButton
+                                        }
+                                        onClick={() =>
+                                            onEdit(material)
+                                        }
+                                    >
+                                        <Edit3 size={16} />
+                                    </button>
+                                )}
                             </div>
                         ),
                     )}
@@ -2928,12 +2920,20 @@ function OracalQuantityCell({
     onEdit,
 }: {
     material?: MaterialCatalogItem;
-    onEdit: (
+    onEdit?: (
         material: MaterialCatalogItem,
     ) => void;
 }) {
     if (!material) {
         return <>—</>;
+    }
+
+    if (!onEdit) {
+        return (
+            <strong>
+                {numberFormatter.format(material.currentQuantity)} м
+            </strong>
+        );
     }
 
     return (

@@ -1,4 +1,6 @@
 ﻿using AlmazManager.Application.Features.Inventory.Commands;
+using AlmazManager.Application.Interfaces;
+using AlmazManager.Application.Security;
 using AlmazManager.Contracts.Responses.Inventory;
 using AlmazManager.Domain.Entities;
 using AlmazManager.Domain.Enums;
@@ -11,27 +13,26 @@ public sealed class BulkInventoryHandler
     private readonly IMaterialRepository _materialRepository;
     private readonly IStockRepository _stockRepository;
     private readonly IOperationRepository _operationRepository;
+    private readonly ICategoryAccessService _categoryAccessService;
+    private readonly ICurrentUserService _currentUserService;
 
     public BulkInventoryHandler(
         IMaterialRepository materialRepository,
         IStockRepository stockRepository,
-        IOperationRepository operationRepository)
+        IOperationRepository operationRepository,
+        ICategoryAccessService categoryAccessService,
+        ICurrentUserService currentUserService)
     {
         _materialRepository = materialRepository;
         _stockRepository = stockRepository;
         _operationRepository = operationRepository;
+        _categoryAccessService = categoryAccessService;
+        _currentUserService = currentUserService;
     }
 
     public async Task<BulkInventoryResponse> HandleAsync(
         BulkInventoryCommand command)
     {
-        if (command.UserId == Guid.Empty)
-        {
-            throw new ArgumentException(
-                "Пользователь не указан.",
-                nameof(command.UserId));
-        }
-
         if (command.Items is null || command.Items.Count == 0)
         {
             throw new ArgumentException(
@@ -77,6 +78,27 @@ public sealed class BulkInventoryHandler
                     $"Материал {item.MaterialId} не найден.");
             }
 
+            if (!material.IsActive)
+            {
+                throw new InvalidOperationException(
+                    $"Материал '{material.Name}' находится в архиве.");
+            }
+
+            if (material.Kind == MaterialKind.Standard &&
+                item.ActualQuantity != decimal.Truncate(item.ActualQuantity))
+            {
+                throw new ArgumentException(
+                    $"Для материала '{material.Name}' количество должно быть целым.");
+            }
+
+            var permission = material.Kind == MaterialKind.Oracal641
+                ? CategoryPermission.InventoryOracal
+                : CategoryPermission.InventoryStandard;
+
+            await _categoryAccessService.EnsureAccessAsync(
+                material.CategoryId,
+                permission);
+
             var stock = await _stockRepository.GetByMaterialIdAsync(
                 item.MaterialId);
 
@@ -106,8 +128,13 @@ public sealed class BulkInventoryHandler
                 var operation = new Operation(
                     item.MaterialId,
                     OperationType.Inventory,
-                    Math.Abs(difference),
-                    command.UserId,
+                    previousQuantity,
+                    difference,
+                    stock.Quantity,
+                    _currentUserService.UserId,
+                    null,
+                    false,
+                    null,
                     operationComment);
 
                 await _operationRepository.AddAsync(operation);

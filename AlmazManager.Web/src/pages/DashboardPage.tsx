@@ -10,7 +10,10 @@ import {
     Plus,
 } from 'lucide-react';
 
+import { useNavigate } from 'react-router-dom';
+
 import api from '../api/api';
+import { useAuth } from '../auth/AuthContext';
 
 type AttentionMaterial = {
     materialId: string;
@@ -47,6 +50,8 @@ type DashboardResponse = {
     receivingOperations: number;
     issueOperations: number;
     inventoryOperations: number;
+    receivingToday: number;
+    issueToday: number;
     attentionMaterials: AttentionMaterial[];
     recentOperations: RecentOperation[];
 };
@@ -56,6 +61,8 @@ const numberFormatter = new Intl.NumberFormat('ru-RU', {
 });
 
 export default function DashboardPage() {
+    const navigate = useNavigate();
+    const { user } = useAuth();
     const [dashboard, setDashboard] =
         useState<DashboardResponse | null>(null);
 
@@ -147,7 +154,7 @@ export default function DashboardPage() {
                     </p>
 
                     <h1>
-                        Добрый день, Администратор
+                        Добрый день, {user?.name ?? 'сотрудник'}
                     </h1>
 
                     <p>
@@ -254,6 +261,7 @@ export default function DashboardPage() {
                             <button
                                 className="text-button"
                                 type="button"
+                                onClick={() => navigate('/stock')}
                             >
                                 Смотреть все
                             </button>
@@ -364,6 +372,7 @@ export default function DashboardPage() {
                             <button
                                 className="text-button"
                                 type="button"
+                                onClick={() => navigate('/operations')}
                             >
                                 Перейти в журнал
                             </button>
@@ -469,6 +478,7 @@ export default function DashboardPage() {
                                 title="Приход"
                                 subtitle="Создать приход"
                                 tone="success"
+                                onClick={() => navigate('/receiving')}
                             />
 
                             <QuickAction
@@ -478,6 +488,7 @@ export default function DashboardPage() {
                                 title="Расход"
                                 subtitle="Создать расход"
                                 tone="danger"
+                                onClick={() => navigate('/issue')}
                             />
 
                             <QuickAction
@@ -487,6 +498,7 @@ export default function DashboardPage() {
                                 title="Инвентаризация"
                                 subtitle="Новый документ"
                                 tone="info"
+                                onClick={() => navigate('/inventory')}
                             />
 
                             <QuickAction
@@ -494,6 +506,7 @@ export default function DashboardPage() {
                                 title="Материал"
                                 subtitle="Добавить материал"
                                 tone="blue"
+                                onClick={() => navigate('/materials')}
                             />
                         </div>
                     </section>
@@ -602,24 +615,24 @@ export default function DashboardPage() {
 
                             <div>
                                 <span>
-                                    Приходов
+                                    Приходов сегодня
                                 </span>
 
                                 <strong>
                                     {displayNumber(
-                                        dashboard?.receivingOperations,
+                                        dashboard?.receivingToday,
                                     )}
                                 </strong>
                             </div>
 
                             <div>
                                 <span>
-                                    Расходов
+                                    Расходов сегодня
                                 </span>
 
                                 <strong>
                                     {displayNumber(
-                                        dashboard?.issueOperations,
+                                        dashboard?.issueToday,
                                     )}
                                 </strong>
                             </div>
@@ -811,16 +824,19 @@ function QuickAction({
     title,
     subtitle,
     tone,
+    onClick,
 }: {
     icon: React.ReactNode;
     title: string;
     subtitle: string;
     tone: string;
+    onClick: () => void;
 }) {
     return (
         <button
             className={`quick-action quick-${tone}`}
             type="button"
+            onClick={onClick}
         >
             {icon}
 

@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using AlmazManager.Application.Features.Dashboard.Handlers;
 using AlmazManager.Contracts.Responses;
 
@@ -6,6 +7,7 @@ namespace AlmazManager.API.Controllers;
 
 [ApiController]
 [Route("api/dashboard")]
+[Authorize]
 public sealed class DashboardController : ControllerBase
 {
     private readonly GetDashboardHandler _handler;

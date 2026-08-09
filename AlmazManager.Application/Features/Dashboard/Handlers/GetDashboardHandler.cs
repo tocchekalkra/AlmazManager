@@ -1,4 +1,6 @@
-﻿using AlmazManager.Contracts.Responses;
+﻿using AlmazManager.Application.Interfaces;
+using AlmazManager.Application.Security;
+using AlmazManager.Contracts.Responses;
 using AlmazManager.Domain.Enums;
 using AlmazManager.Domain.Interfaces;
 
@@ -11,19 +13,22 @@ public sealed class GetDashboardHandler
     private readonly IStockRepository _stockRepository;
     private readonly IOperationRepository _operationRepository;
     private readonly IUserRepository _userRepository;
+    private readonly ICategoryAccessService _categoryAccessService;
 
     public GetDashboardHandler(
         IMaterialRepository materialRepository,
         ICategoryRepository categoryRepository,
         IStockRepository stockRepository,
         IOperationRepository operationRepository,
-        IUserRepository userRepository)
+        IUserRepository userRepository,
+        ICategoryAccessService categoryAccessService)
     {
         _materialRepository = materialRepository;
         _categoryRepository = categoryRepository;
         _stockRepository = stockRepository;
         _operationRepository = operationRepository;
         _userRepository = userRepository;
+        _categoryAccessService = categoryAccessService;
     }
 
     public async Task<DashboardResponse> HandleAsync()
@@ -32,6 +37,35 @@ public sealed class GetDashboardHandler
         var categories = await _categoryRepository.GetAllAsync();
         var stocks = await _stockRepository.GetAllAsync();
         var operations = await _operationRepository.GetAllAsync();
+
+        var allowedCategoryIds =
+            await _categoryAccessService.GetAllowedCategoryIdsAsync(
+                CategoryPermission.View);
+
+        if (allowedCategoryIds is not null)
+        {
+            materials = materials
+                .Where(material =>
+                    allowedCategoryIds.Contains(material.CategoryId))
+                .ToList();
+
+            categories = categories
+                .Where(category => allowedCategoryIds.Contains(category.Id))
+                .ToList();
+
+            var visibleMaterialIds = materials
+                .Select(material => material.Id)
+                .ToHashSet();
+
+            stocks = stocks
+                .Where(stock => visibleMaterialIds.Contains(stock.MaterialId))
+                .ToList();
+
+            operations = operations
+                .Where(operation =>
+                    visibleMaterialIds.Contains(operation.MaterialId))
+                .ToList();
+        }
 
         var stockByMaterialId = stocks.ToDictionary(
             stock => stock.MaterialId,
@@ -81,6 +115,18 @@ public sealed class GetDashboardHandler
 
         var inventoryOperations = operations.Count(operation =>
             operation.Type == OperationType.Inventory);
+
+        var todayUtc = DateTime.UtcNow.Date;
+
+        var receivingToday = operations.Count(operation =>
+            operation.Type == OperationType.Receiving &&
+            !operation.IsReversal &&
+            operation.CreatedAtUtc >= todayUtc);
+
+        var issueToday = operations.Count(operation =>
+            operation.Type == OperationType.Issue &&
+            !operation.IsReversal &&
+            operation.CreatedAtUtc >= todayUtc);
 
         var attentionMaterials = activeMaterials
             .Select(material =>
@@ -187,6 +233,8 @@ public sealed class GetDashboardHandler
             receivingOperations,
             issueOperations,
             inventoryOperations,
+            receivingToday,
+            issueToday,
             attentionMaterials,
             recentOperations);
     }

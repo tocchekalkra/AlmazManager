@@ -1,4 +1,6 @@
-﻿using AlmazManager.Contracts.Responses.Documents;
+﻿using AlmazManager.Application.Interfaces;
+using AlmazManager.Application.Security;
+using AlmazManager.Contracts.Responses.Documents;
 using AlmazManager.Domain.Entities;
 using AlmazManager.Domain.Interfaces;
 
@@ -9,11 +11,25 @@ public sealed class GetWarehouseDocumentsHandler
     private readonly IWarehouseDocumentRepository
         _repository;
 
+    private readonly IMaterialRepository
+        _materialRepository;
+
+    private readonly ICategoryAccessService
+        _categoryAccessService;
+
     public GetWarehouseDocumentsHandler(
-        IWarehouseDocumentRepository repository)
+        IWarehouseDocumentRepository repository,
+        IMaterialRepository materialRepository,
+        ICategoryAccessService categoryAccessService)
     {
         _repository =
             repository;
+
+        _materialRepository =
+            materialRepository;
+
+        _categoryAccessService =
+            categoryAccessService;
     }
 
     public async Task<List<WarehouseDocumentResponse>>
@@ -23,8 +39,16 @@ public sealed class GetWarehouseDocumentsHandler
             await _repository
                 .GetAllAsync();
 
+        var visibleMaterialIds =
+            await GetVisibleMaterialIdsAsync();
+
         return documents
-            .Select(Map)
+            .Where(document =>
+                visibleMaterialIds is null ||
+                document.Items.Any(item =>
+                    visibleMaterialIds.Contains(item.MaterialId)))
+            .Select(document =>
+                Map(document, visibleMaterialIds))
             .ToList();
     }
 
@@ -36,13 +60,48 @@ public sealed class GetWarehouseDocumentsHandler
             await _repository
                 .GetByIdAsync(id);
 
-        return document is null
-            ? null
-            : Map(document);
+        if (document is null)
+        {
+            return null;
+        }
+
+        var visibleMaterialIds =
+            await GetVisibleMaterialIdsAsync();
+
+        if (visibleMaterialIds is not null &&
+            !document.Items.Any(item =>
+                visibleMaterialIds.Contains(item.MaterialId)))
+        {
+            return null;
+        }
+
+        return Map(document, visibleMaterialIds);
+    }
+
+    private async Task<HashSet<Guid>?>
+        GetVisibleMaterialIdsAsync()
+    {
+        var allowedCategoryIds =
+            await _categoryAccessService.GetAllowedCategoryIdsAsync(
+                CategoryPermission.View);
+
+        if (allowedCategoryIds is null)
+        {
+            return null;
+        }
+
+        var materials = await _materialRepository.GetAllAsync();
+
+        return materials
+            .Where(material =>
+                allowedCategoryIds.Contains(material.CategoryId))
+            .Select(material => material.Id)
+            .ToHashSet();
     }
 
     private static WarehouseDocumentResponse Map(
-        WarehouseDocument document)
+        WarehouseDocument document,
+        HashSet<Guid>? visibleMaterialIds)
     {
         return new WarehouseDocumentResponse(
             document.Id,
@@ -57,6 +116,9 @@ public sealed class GetWarehouseDocumentsHandler
             document.PostedAtUtc,
             document.CancelledAtUtc,
             document.Items
+                .Where(item =>
+                    visibleMaterialIds is null ||
+                    visibleMaterialIds.Contains(item.MaterialId))
                 .Select(x =>
                     new WarehouseDocumentItemResponse(
                         x.Id,

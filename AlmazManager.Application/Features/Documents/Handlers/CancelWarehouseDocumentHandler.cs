@@ -1,4 +1,5 @@
-﻿using AlmazManager.Contracts.Responses.Documents;
+﻿using AlmazManager.Application.Interfaces;
+using AlmazManager.Contracts.Responses.Documents;
 using AlmazManager.Domain.Entities;
 using AlmazManager.Domain.Enums;
 using AlmazManager.Domain.Interfaces;
@@ -19,11 +20,15 @@ public sealed class CancelWarehouseDocumentHandler
     private readonly IOperationRepository
         _operationRepository;
 
+    private readonly ICurrentUserService
+        _currentUserService;
+
     public CancelWarehouseDocumentHandler(
         IWarehouseDocumentRepository documentRepository,
         IMaterialRepository materialRepository,
         IStockRepository stockRepository,
-        IOperationRepository operationRepository)
+        IOperationRepository operationRepository,
+        ICurrentUserService currentUserService)
     {
         _documentRepository =
             documentRepository;
@@ -36,6 +41,9 @@ public sealed class CancelWarehouseDocumentHandler
 
         _operationRepository =
             operationRepository;
+
+        _currentUserService =
+            currentUserService;
     }
 
     public async Task<WarehouseDocumentResponse>
@@ -168,7 +176,7 @@ public sealed class CancelWarehouseDocumentHandler
                     quantityBefore,
                     quantityChange,
                     quantityAfter,
-                    document.UserId,
+                    _currentUserService.UserId,
                     document.Id,
                     true,
                     originalOperation?.Id,

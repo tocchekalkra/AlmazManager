@@ -1,4 +1,6 @@
-﻿using AlmazManager.Contracts.Requests.Operations;
+﻿using AlmazManager.Application.Interfaces;
+using AlmazManager.Application.Security;
+using AlmazManager.Contracts.Requests.Operations;
 using AlmazManager.Contracts.Responses;
 using AlmazManager.Domain.Enums;
 using AlmazManager.Domain.Interfaces;
@@ -9,13 +11,16 @@ public sealed class GetOperationCatalogHandler
 {
     private readonly IOperationRepository _operationRepository;
     private readonly IMaterialRepository _materialRepository;
+    private readonly ICategoryAccessService _categoryAccessService;
 
     public GetOperationCatalogHandler(
         IOperationRepository operationRepository,
-        IMaterialRepository materialRepository)
+        IMaterialRepository materialRepository,
+        ICategoryAccessService categoryAccessService)
     {
         _operationRepository = operationRepository;
         _materialRepository = materialRepository;
+        _categoryAccessService = categoryAccessService;
     }
 
     public async Task<OperationCatalogResponse> HandleAsync(
@@ -34,6 +39,27 @@ public sealed class GetOperationCatalogHandler
 
         var operations = await _operationRepository.GetAllAsync();
         var materials = await _materialRepository.GetAllAsync();
+
+        var allowedCategoryIds =
+            await _categoryAccessService.GetAllowedCategoryIdsAsync(
+                CategoryPermission.View);
+
+        if (allowedCategoryIds is not null)
+        {
+            materials = materials
+                .Where(material =>
+                    allowedCategoryIds.Contains(material.CategoryId))
+                .ToList();
+
+            var visibleMaterialIds = materials
+                .Select(material => material.Id)
+                .ToHashSet();
+
+            operations = operations
+                .Where(operation =>
+                    visibleMaterialIds.Contains(operation.MaterialId))
+                .ToList();
+        }
 
         var materialById = materials.ToDictionary(
             material => material.Id);

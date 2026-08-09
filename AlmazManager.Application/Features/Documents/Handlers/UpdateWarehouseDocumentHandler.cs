@@ -1,4 +1,6 @@
 ﻿using AlmazManager.Application.Features.Documents.Commands;
+using AlmazManager.Application.Interfaces;
+using AlmazManager.Application.Security;
 using AlmazManager.Contracts.Responses.Documents;
 using AlmazManager.Domain.Entities;
 using AlmazManager.Domain.Enums;
@@ -14,15 +16,22 @@ public sealed class UpdateWarehouseDocumentHandler
     private readonly IMaterialRepository
         _materialRepository;
 
+    private readonly ICategoryAccessService
+        _categoryAccessService;
+
     public UpdateWarehouseDocumentHandler(
         IWarehouseDocumentRepository documentRepository,
-        IMaterialRepository materialRepository)
+        IMaterialRepository materialRepository,
+        ICategoryAccessService categoryAccessService)
     {
         _documentRepository =
             documentRepository;
 
         _materialRepository =
             materialRepository;
+
+        _categoryAccessService =
+            categoryAccessService;
     }
 
     public async Task<WarehouseDocumentResponse>
@@ -52,6 +61,26 @@ public sealed class UpdateWarehouseDocumentHandler
         {
             throw new InvalidOperationException(
                 "Редактировать можно только черновик документа.");
+        }
+
+        var permission = document.Type == WarehouseDocumentType.Receiving
+            ? CategoryPermission.Receive
+            : CategoryPermission.Issue;
+
+        foreach (var existingItem in document.Items)
+        {
+            var existingMaterial = await _materialRepository.GetByIdAsync(
+                existingItem.MaterialId);
+
+            if (existingMaterial is null)
+            {
+                throw new InvalidOperationException(
+                    "Материал из документа не найден.");
+            }
+
+            await _categoryAccessService.EnsureAccessAsync(
+                existingMaterial.CategoryId,
+                permission);
         }
 
         if (command.Items is null ||
@@ -103,6 +132,17 @@ public sealed class UpdateWarehouseDocumentHandler
                 throw new InvalidOperationException(
                     $"Материал '{material.Name}' находится в архиве.");
             }
+
+            if (material.Kind == MaterialKind.Standard &&
+                item.Quantity != decimal.Truncate(item.Quantity))
+            {
+                throw new ArgumentException(
+                    $"Для материала '{material.Name}' количество должно быть целым.");
+            }
+
+            await _categoryAccessService.EnsureAccessAsync(
+                material.CategoryId,
+                permission);
         }
 
         document.ChangeComment(

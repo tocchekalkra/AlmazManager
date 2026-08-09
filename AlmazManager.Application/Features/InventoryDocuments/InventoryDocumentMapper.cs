@@ -8,13 +8,20 @@ internal static class InventoryDocumentMapper
 {
     public static async Task<InventoryDocumentResponse> MapAsync(
         InventoryDocument document,
-        IMaterialRepository materialRepository)
+        IMaterialRepository materialRepository,
+        ISet<Guid>? visibleMaterialIds = null)
     {
         var items =
             new List<InventoryDocumentItemResponse>();
 
         foreach (var item in document.Items)
         {
+            if (visibleMaterialIds is not null &&
+                !visibleMaterialIds.Contains(item.MaterialId))
+            {
+                continue;
+            }
+
             var material =
                 await materialRepository.GetByIdAsync(
                     item.MaterialId);

@@ -131,6 +131,13 @@ public sealed class CreateWarehouseDocumentHandler
                     $"Материал '{material.Name}' находится в архиве.");
             }
 
+            if (material.Kind == MaterialKind.Standard &&
+                item.Quantity != decimal.Truncate(item.Quantity))
+            {
+                throw new ArgumentException(
+                    $"Для материала '{material.Name}' количество должно быть целым.");
+            }
+
             var permission =
                 type ==
                 WarehouseDocumentType.Receiving

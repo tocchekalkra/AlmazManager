@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 
 import api from '../api/api';
+import { loadAllMaterialCatalogItems } from '../api/catalog';
 
 type MaterialCatalogItem = {
     id: string;
@@ -30,14 +31,6 @@ type MaterialCatalogItem = {
     isActive: boolean;
     kind: string;
     widthMeters?: number | null;
-};
-
-type MaterialCatalogResponse = {
-    page: number;
-    pageSize: number;
-    totalCount: number;
-    totalPages: number;
-    items: MaterialCatalogItem[];
 };
 
 type InventoryRow = {
@@ -106,13 +99,11 @@ export default function InventoryPage() {
             setLoading(true);
             setError('');
 
-            const response =
-                await api.get<MaterialCatalogResponse>(
-                    '/materials/catalog?pageSize=100',
-                );
+            const items =
+                await loadAllMaterialCatalogItems<MaterialCatalogItem>();
 
             const materials =
-                response.data.items.filter(
+                items.filter(
                     material =>
                         material.isActive &&
                         material.kind !==
