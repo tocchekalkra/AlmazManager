@@ -162,6 +162,7 @@ public sealed class WarehouseDocumentsController :
     }
 
     [HttpPost("{id:guid}/cancel")]
+    [Authorize(Roles = "Administrator")]
     public async Task<ActionResult<WarehouseDocumentResponse>>
         Cancel(Guid id)
     {

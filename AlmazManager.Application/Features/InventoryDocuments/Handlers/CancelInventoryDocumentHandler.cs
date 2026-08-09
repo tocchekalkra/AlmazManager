@@ -1,4 +1,5 @@
-﻿using AlmazManager.Contracts.Responses.InventoryDocuments;
+﻿using AlmazManager.Application.Interfaces;
+using AlmazManager.Contracts.Responses.InventoryDocuments;
 using AlmazManager.Domain.Enums;
 using AlmazManager.Domain.Interfaces;
 
@@ -10,17 +11,20 @@ public sealed class CancelInventoryDocumentHandler
     private readonly IMaterialRepository _materialRepository;
     private readonly IStockRepository _stockRepository;
     private readonly IOperationRepository _operationRepository;
+    private readonly ICurrentUserService _currentUserService;
 
     public CancelInventoryDocumentHandler(
         IInventoryDocumentRepository documentRepository,
         IMaterialRepository materialRepository,
         IStockRepository stockRepository,
-        IOperationRepository operationRepository)
+        IOperationRepository operationRepository,
+        ICurrentUserService currentUserService)
     {
         _documentRepository = documentRepository;
         _materialRepository = materialRepository;
         _stockRepository = stockRepository;
         _operationRepository = operationRepository;
+        _currentUserService = currentUserService;
     }
 
     public async Task<InventoryDocumentResponse> HandleAsync(
@@ -103,7 +107,7 @@ public sealed class CancelInventoryDocumentHandler
                     before,
                     reversalChange,
                     stock.Quantity,
-                    document.UserId,
+                    _currentUserService.UserId,
                     document.Id,
                     true,
                     original.Id,

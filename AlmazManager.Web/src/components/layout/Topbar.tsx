@@ -1,9 +1,6 @@
 import {
-    Bell,
     ChevronDown,
     LogOut,
-    Moon,
-    Search,
 } from 'lucide-react';
 
 import {
@@ -48,33 +45,12 @@ export default function Topbar() {
 
     return (
         <header className="topbar">
-            <div className="global-search">
-                <Search size={19} />
-
-                <input
-                    placeholder="Поиск по материалам, документам, операциям..."
-                />
+            <div className="topbar-context">
+                <strong>Склад рекламного производства</strong>
+                <span>Единый журнал движения материалов</span>
             </div>
 
             <div className="topbar-actions">
-                <button
-                    className="icon-button"
-                    type="button"
-                >
-                    <Bell size={20} />
-
-                    <span className="notification-badge">
-                        3
-                    </span>
-                </button>
-
-                <button
-                    className="icon-button"
-                    type="button"
-                >
-                    <Moon size={20} />
-                </button>
-
                 <div className="profile-wrapper">
                     <button
                         className="profile-button"

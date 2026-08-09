@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using AlmazManager.Application.Features.Categories.Commands;
 using AlmazManager.Application.Features.Categories.Handlers;
 using AlmazManager.Contracts.Requests.Categories;
@@ -8,6 +9,7 @@ namespace AlmazManager.API.Controllers;
 
 [ApiController]
 [Route("api/categories")]
+[Authorize]
 public sealed class CategoriesController : ControllerBase
 {
     private readonly CreateCategoryHandler _createHandler;
@@ -31,6 +33,7 @@ public sealed class CategoriesController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Administrator")]
     public async Task<ActionResult<CategoryResponse>> Create(
         [FromBody] CreateCategoryRequest request)
     {
@@ -68,6 +71,7 @@ public sealed class CategoriesController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Roles = "Administrator")]
     public async Task<ActionResult<CategoryResponse>> Update(
         Guid id,
         [FromBody] UpdateCategoryRequest request)
@@ -82,6 +86,7 @@ public sealed class CategoriesController : ControllerBase
     }
 
     [HttpPatch("{id:guid}/archive")]
+    [Authorize(Roles = "Administrator")]
     public async Task<ActionResult<CategoryResponse>> Archive(Guid id)
     {
         var command = new SetCategoryActivityCommand(
@@ -94,6 +99,7 @@ public sealed class CategoriesController : ControllerBase
     }
 
     [HttpPatch("{id:guid}/restore")]
+    [Authorize(Roles = "Administrator")]
     public async Task<ActionResult<CategoryResponse>> Restore(Guid id)
     {
         var command = new SetCategoryActivityCommand(

@@ -5,6 +5,7 @@ import {
 } from 'react-router-dom';
 
 import ProtectedRoute from './auth/ProtectedRoute';
+import AuthorizationRoute from './auth/AuthorizationRoute';
 
 import AppLayout from './components/layout/AppLayout';
 
@@ -47,10 +48,12 @@ export default function App() {
                         element={<MaterialsPage />}
                     />
 
-                    <Route
-                        path="/categories"
-                        element={<CategoriesPage />}
-                    />
+                    <Route element={<AuthorizationRoute administratorOnly />}>
+                        <Route
+                            path="/categories"
+                            element={<CategoriesPage />}
+                        />
+                    </Route>
 
                     <Route
                         path="/receiving"
@@ -63,14 +66,30 @@ export default function App() {
                     />
 
                     <Route
-                        path="/inventory"
-                        element={<InventoryPage />}
-                    />
+                        element={
+                            <AuthorizationRoute
+                                permission="canInventoryStandard"
+                            />
+                        }
+                    >
+                        <Route
+                            path="/inventory"
+                            element={<InventoryPage />}
+                        />
+                    </Route>
 
                     <Route
-                        path="/inventory/oracal"
-                        element={<OracalInventoryPage />}
-                    />
+                        element={
+                            <AuthorizationRoute
+                                permission="canInventoryOracal"
+                            />
+                        }
+                    >
+                        <Route
+                            path="/inventory/oracal"
+                            element={<OracalInventoryPage />}
+                        />
+                    </Route>
 
                     <Route
                         path="/documents"
@@ -82,15 +101,17 @@ export default function App() {
                         element={<OperationsPage />}
                     />
 
-                    <Route
-                        path="/users"
-                        element={<UsersPage />}
-                    />
+                    <Route element={<AuthorizationRoute administratorOnly />}>
+                        <Route
+                            path="/users"
+                            element={<UsersPage />}
+                        />
 
-                    <Route
-                        path="/settings"
-                        element={<SettingsPage />}
-                    />
+                        <Route
+                            path="/settings"
+                            element={<SettingsPage />}
+                        />
+                    </Route>
                 </Route>
             </Route>
 

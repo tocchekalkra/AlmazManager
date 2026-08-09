@@ -1,4 +1,6 @@
-﻿using AlmazManager.Contracts.Responses;
+﻿using AlmazManager.Application.Interfaces;
+using AlmazManager.Application.Security;
+using AlmazManager.Contracts.Responses;
 using AlmazManager.Domain.Interfaces;
 
 namespace AlmazManager.Application.Features.Categories.Handlers;
@@ -6,11 +8,14 @@ namespace AlmazManager.Application.Features.Categories.Handlers;
 public sealed class GetCategoryByIdHandler
 {
     private readonly ICategoryRepository _categoryRepository;
+    private readonly ICategoryAccessService _categoryAccessService;
 
     public GetCategoryByIdHandler(
-        ICategoryRepository categoryRepository)
+        ICategoryRepository categoryRepository,
+        ICategoryAccessService categoryAccessService)
     {
         _categoryRepository = categoryRepository;
+        _categoryAccessService = categoryAccessService;
     }
 
     public async Task<CategoryResponse?> HandleAsync(Guid categoryId)
@@ -26,6 +31,13 @@ public sealed class GetCategoryByIdHandler
             await _categoryRepository.GetByIdAsync(categoryId);
 
         if (category is null)
+        {
+            return null;
+        }
+
+        if (!await _categoryAccessService.HasAccessAsync(
+                category.Id,
+                CategoryPermission.View))
         {
             return null;
         }

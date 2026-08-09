@@ -12,6 +12,8 @@ public sealed record DashboardResponse(
     int ReceivingOperations,
     int IssueOperations,
     int InventoryOperations,
+    int ReceivingToday,
+    int IssueToday,
     IReadOnlyList<DashboardAttentionMaterialResponse>? AttentionMaterials = null,
     IReadOnlyList<DashboardRecentOperationResponse>? RecentOperations = null);
 

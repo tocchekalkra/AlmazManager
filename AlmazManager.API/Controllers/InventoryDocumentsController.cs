@@ -163,6 +163,7 @@ public sealed class InventoryDocumentsController :
     }
 
     [HttpPost("{id:guid}/cancel")]
+    [Authorize(Roles = "Administrator")]
     public async Task<ActionResult<InventoryDocumentResponse>>
         Cancel(Guid id)
     {

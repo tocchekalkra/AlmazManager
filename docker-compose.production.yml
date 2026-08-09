@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${ALMAZ_DB_USER:-almazmanager}
+      POSTGRES_PASSWORD: ${ALMAZ_DB_PASSWORD}
+      POSTGRES_DB: ${ALMAZ_DB_NAME:-almazmanager}
+    volumes:
+      - almazmanager_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ALMAZ_DB_USER:-almazmanager} -d ${ALMAZ_DB_NAME:-almazmanager}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: AlmazManager.API/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${ALMAZ_DB_NAME:-almazmanager};Username=${ALMAZ_DB_USER:-almazmanager};Password=${ALMAZ_DB_PASSWORD}
+      Database__ApplyMigrationsOnStartup: "true"
+      Jwt__Issuer: AlmazManager.API
+      Jwt__Audience: AlmazManager.Clients
+      Jwt__SecretKey: ${ALMAZ_JWT_SECRET}
+      Jwt__ExpirationHours: "8"
+      BootstrapAdmin__Login: ${ALMAZ_ADMIN_LOGIN:-admin}
+      BootstrapAdmin__FullName: ${ALMAZ_ADMIN_NAME:-Администратор}
+      BootstrapAdmin__Password: ${ALMAZ_ADMIN_PASSWORD}
+
+  web:
+    build:
+      context: .
+      dockerfile: AlmazManager.Web/Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${ALMAZ_WEB_PORT:-8088}:80"
+
+volumes:
+  almazmanager_postgres:

@@ -1,4 +1,6 @@
-﻿using AlmazManager.Contracts.Requests.Stocks;
+﻿using AlmazManager.Application.Interfaces;
+using AlmazManager.Application.Security;
+using AlmazManager.Contracts.Requests.Stocks;
 using AlmazManager.Contracts.Responses;
 using AlmazManager.Domain.Interfaces;
 
@@ -8,13 +10,16 @@ public sealed class GetStockCatalogHandler
 {
     private readonly IMaterialRepository _materialRepository;
     private readonly IStockRepository _stockRepository;
+    private readonly ICategoryAccessService _categoryAccessService;
 
     public GetStockCatalogHandler(
         IMaterialRepository materialRepository,
-        IStockRepository stockRepository)
+        IStockRepository stockRepository,
+        ICategoryAccessService categoryAccessService)
     {
         _materialRepository = materialRepository;
         _stockRepository = stockRepository;
+        _categoryAccessService = categoryAccessService;
     }
 
     public async Task<StockCatalogResponse> HandleAsync(
@@ -33,6 +38,18 @@ public sealed class GetStockCatalogHandler
 
         var materials = await _materialRepository.GetAllAsync();
         var stocks = await _stockRepository.GetAllAsync();
+
+        var allowedCategoryIds =
+            await _categoryAccessService.GetAllowedCategoryIdsAsync(
+                CategoryPermission.View);
+
+        if (allowedCategoryIds is not null)
+        {
+            materials = materials
+                .Where(material =>
+                    allowedCategoryIds.Contains(material.CategoryId))
+                .ToList();
+        }
 
         var stockByMaterialId = stocks.ToDictionary(
             stock => stock.MaterialId);

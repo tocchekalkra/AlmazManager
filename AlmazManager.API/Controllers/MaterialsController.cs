@@ -59,6 +59,7 @@ public sealed class MaterialsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Administrator")]
     public async Task<ActionResult<MaterialResponse>>
         Create(
             [FromBody]
@@ -94,6 +95,7 @@ public sealed class MaterialsController : ControllerBase
      * /api/materials/bulk-standard
      */
     [HttpPost("bulk-standard")]
+    [Authorize(Roles = "Administrator")]
     public async Task<ActionResult<List<MaterialResponse>>>
         CreateBulkStandard(
             [FromBody]
@@ -161,6 +163,7 @@ public sealed class MaterialsController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Roles = "Administrator")]
     public async Task<ActionResult<MaterialResponse>>
         Update(
             Guid id,
@@ -189,6 +192,7 @@ public sealed class MaterialsController : ControllerBase
     }
 
     [HttpPatch("{id:guid}/archive")]
+    [Authorize(Roles = "Administrator")]
     public async Task<ActionResult<MaterialResponse>>
         Archive(Guid id)
     {
@@ -205,6 +209,7 @@ public sealed class MaterialsController : ControllerBase
     }
 
     [HttpPatch("{id:guid}/restore")]
+    [Authorize(Roles = "Administrator")]
     public async Task<ActionResult<MaterialResponse>>
         Restore(Guid id)
     {

@@ -87,6 +87,8 @@ public sealed class PostInventoryDocumentHandler
          * ничего не меняем,
          * только проверяем весь документ.
          */
+        MaterialKind? inventoryKind = null;
+
         foreach (var item in document.Items)
         {
             var material =
@@ -104,6 +106,22 @@ public sealed class PostInventoryDocumentHandler
             {
                 throw new InvalidOperationException(
                     $"Материал '{material.Name}' находится в архиве.");
+            }
+
+            if (inventoryKind.HasValue &&
+                inventoryKind.Value != material.Kind)
+            {
+                throw new InvalidOperationException(
+                    "Стандартные материалы и ORACAL должны инвентаризироваться отдельными документами.");
+            }
+
+            inventoryKind ??= material.Kind;
+
+            if (material.Kind == MaterialKind.Standard &&
+                item.ActualQuantity != decimal.Truncate(item.ActualQuantity))
+            {
+                throw new InvalidOperationException(
+                    $"Для материала '{material.Name}' количество должно быть целым.");
             }
 
             var permission =

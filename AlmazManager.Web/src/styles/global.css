@@ -202,6 +202,24 @@ button {
     z-index: 15;
 }
 
+.topbar-context {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.topbar-context strong {
+    color: #edf3fa;
+    font-size: 14px;
+    font-weight: 650;
+}
+
+.topbar-context span {
+    color: #778698;
+    font-size: 11px;
+}
+
 .global-search {
     display: flex;
     align-items: center;
