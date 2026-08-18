@@ -31,6 +31,24 @@ public sealed class AppUserConfiguration :
         builder.Property(user => user.Role)
             .IsRequired();
 
+        builder.Property(user => user.CanManageMaterials)
+            .IsRequired();
+
+        builder.Property(user => user.CanArchiveMaterials)
+            .IsRequired();
+
+        builder.Property(user => user.CanRestoreMaterials)
+            .IsRequired();
+
+        builder.Property(user => user.CanPermanentlyDeleteMaterials)
+            .IsRequired();
+
+        builder.Property(user => user.CanCancelDocuments)
+            .IsRequired();
+
+        builder.Property(user => user.CanManageSupplies)
+            .IsRequired();
+
         builder.Property(user => user.CreatedAtUtc)
             .IsRequired();
 

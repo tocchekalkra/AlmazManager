@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using AlmazManager.Application.Features.Issue.Commands;
 using AlmazManager.Application.Features.Issue.Handlers;
 using AlmazManager.Contracts.Requests.Issue;
@@ -8,6 +9,7 @@ namespace AlmazManager.API.Controllers;
 
 [ApiController]
 [Route("api/issue")]
+[Authorize]
 public sealed class IssueController : ControllerBase
 {
     private readonly IssueMaterialHandler _handler;

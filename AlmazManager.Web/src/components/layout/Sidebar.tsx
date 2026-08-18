@@ -16,6 +16,7 @@ import {
     Package,
     Settings,
     SwatchBook,
+    Truck,
     Users,
 } from 'lucide-react';
 
@@ -32,6 +33,7 @@ import api from '../../api/api';
 type CurrentUserAccess = {
     canInventoryStandard: boolean;
     canInventoryOracal: boolean;
+    canManageSupplies: boolean;
 };
 
 type SidebarItem = {
@@ -43,7 +45,8 @@ type SidebarItem = {
 
     permission?:
     | 'inventoryStandard'
-    | 'inventoryOracal';
+    | 'inventoryOracal'
+    | 'manageSupplies';
 };
 
 type SidebarSection = {
@@ -154,14 +157,18 @@ const sections: SidebarSection[] = [
                 icon:
                     History,
             },
+
+            {
+                to: '/supplies',
+                label: 'Счета и поставки',
+                icon: Truck,
+                permission: 'manageSupplies',
+            },
         ],
     },
 
     {
         title: 'СИСТЕМА',
-
-        administratorOnly:
-            true,
 
         items: [
             {
@@ -171,6 +178,9 @@ const sections: SidebarSection[] = [
 
                 icon:
                     Users,
+
+                administratorOnly:
+                    true,
             },
 
             {
@@ -212,6 +222,9 @@ export default function Sidebar() {
 
             canInventoryOracal:
                 isAdministrator,
+
+            canManageSupplies:
+                isAdministrator,
         });
 
     const [
@@ -230,6 +243,9 @@ export default function Sidebar() {
 
                 canInventoryOracal:
                     false,
+
+                canManageSupplies:
+                    false,
             });
 
             setAccessLoaded(
@@ -245,6 +261,9 @@ export default function Sidebar() {
                     true,
 
                 canInventoryOracal:
+                    true,
+
+                canManageSupplies:
                     true,
             });
 
@@ -281,6 +300,10 @@ export default function Sidebar() {
                     canInventoryOracal:
                         response.data
                             .canInventoryOracal,
+
+                    canManageSupplies:
+                        response.data
+                            .canManageSupplies,
                 });
             } catch (
             requestError
@@ -304,6 +327,9 @@ export default function Sidebar() {
                         false,
 
                     canInventoryOracal:
+                        false,
+
+                    canManageSupplies:
                         false,
                 });
             } finally {
@@ -374,6 +400,10 @@ export default function Sidebar() {
                 .canInventoryOracal;
         }
 
+        if (item.permission === 'manageSupplies') {
+            return access.canManageSupplies;
+        }
+
         return false;
     }
 
@@ -406,6 +436,7 @@ export default function Sidebar() {
                 accessLoaded,
                 access.canInventoryStandard,
                 access.canInventoryOracal,
+                access.canManageSupplies,
             ],
         );
 

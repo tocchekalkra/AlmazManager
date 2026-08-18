@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using AlmazManager.Application.Features.Stocks.Handlers;
 using AlmazManager.Contracts.Requests.Stocks;
 using AlmazManager.Contracts.Responses;
@@ -7,6 +8,7 @@ namespace AlmazManager.API.Controllers;
 
 [ApiController]
 [Route("api/stocks")]
+[Authorize]
 public sealed class StocksController : ControllerBase
 {
     private readonly GetStocksHandler _getStocksHandler;

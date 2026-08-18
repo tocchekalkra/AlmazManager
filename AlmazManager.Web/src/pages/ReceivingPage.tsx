@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 
 import api from '../api/api';
+import { loadAllMaterialCatalogItems } from '../api/catalog';
 
 type MaterialCatalogItem = {
     id: string;
@@ -40,12 +41,10 @@ type MaterialCatalogItem = {
     colorHex?: string | null;
 };
 
-type MaterialCatalogResponse = {
-    page: number;
-    pageSize: number;
-    totalCount: number;
-    totalPages: number;
-    items: MaterialCatalogItem[];
+type Category = {
+    id: string;
+    name: string;
+    isActive: boolean;
 };
 
 type ReceivingLine = {
@@ -90,7 +89,10 @@ type WarehouseDocumentResponse = {
 };
 
 type StandardGroup = {
+    key: string;
     name: string;
+    categoryId: string;
+    categoryName: string;
     materials: MaterialCatalogItem[];
 };
 
@@ -113,6 +115,9 @@ export default function ReceivingPage() {
     const [materials, setMaterials] =
         useState<MaterialCatalogItem[]>([]);
 
+    const [categories, setCategories] =
+        useState<Category[]>([]);
+
     const [loading, setLoading] =
         useState(true);
 
@@ -132,6 +137,9 @@ export default function ReceivingPage() {
         externalNumber,
         setExternalNumber,
     ] = useState('');
+
+    const [documentDate, setDocumentDate] =
+        useState(() => new Date().toISOString().slice(0, 10));
 
     const [comment, setComment] =
         useState('');
@@ -179,18 +187,20 @@ export default function ReceivingPage() {
             setLoading(true);
             setError('');
 
-            const response =
-                await api.get<MaterialCatalogResponse>(
-                    '/materials/catalog?pageSize=100',
-                );
+            const [items, categoryResponse] =
+                await Promise.all([
+                    loadAllMaterialCatalogItems<MaterialCatalogItem>(),
+                    api.get<Category[]>('/categories'),
+                ]);
 
             setMaterials(
-                response.data.items
+                items
                     .filter(
                         material =>
                             material.isActive,
                     ) ?? [],
             );
+            setCategories(categoryResponse.data ?? []);
         } catch (
         requestError: any
         ) {
@@ -235,6 +245,9 @@ export default function ReceivingPage() {
 
     const standardGroups =
         useMemo(() => {
+            const categoryMap = new Map(
+                categories.map(category => [category.id, category.name]),
+            );
             const map =
                 new Map<
                     string,
@@ -251,12 +264,19 @@ export default function ReceivingPage() {
                     );
 
                 const key =
-                    groupName.toLowerCase();
+                    `${material.categoryId}::${groupName.toLowerCase()}`;
 
                 const group =
                     map.get(key) ?? {
+                        key,
                         name:
                             groupName,
+
+                        categoryId:
+                            material.categoryId,
+
+                        categoryName:
+                            categoryMap.get(material.categoryId) ?? 'Без категории',
 
                         materials:
                             [],
@@ -295,17 +315,25 @@ export default function ReceivingPage() {
                                         0,
                                     ),
                             ),
-                }))
-                .sort(
-                    (a, b) =>
-                        a.name.localeCompare(
-                            b.name,
-                            'ru',
-                        ),
-                );
+                }));
         }, [
             standardMaterials,
+            categories,
         ]);
+
+    const standardGroupsByCategory = useMemo(() => {
+        const map = new Map<string, { id: string; name: string; groups: StandardGroup[] }>();
+        for (const group of standardGroups) {
+            const category = map.get(group.categoryId) ?? {
+                id: group.categoryId,
+                name: group.categoryName,
+                groups: [],
+            };
+            category.groups.push(group);
+            map.set(group.categoryId, category);
+        }
+        return [...map.values()];
+    }, [standardGroups]);
 
     const oracalGroups =
         useMemo(() => {
@@ -394,7 +422,7 @@ export default function ReceivingPage() {
     const selectedStandardGroup =
         standardGroups.find(
             group =>
-                group.name ===
+                group.key ===
                 selectedGroupName,
         );
 
@@ -523,17 +551,17 @@ export default function ReceivingPage() {
     }
 
     function selectStandardGroup(
-        groupName: string,
+        groupKey: string,
     ) {
         setSelectedGroupName(
-            groupName,
+            groupKey,
         );
 
         const group =
             standardGroups.find(
                 item =>
-                    item.name ===
-                    groupName,
+                    item.key ===
+                    groupKey,
             );
 
         setSelectedMaterialId(
@@ -791,6 +819,10 @@ export default function ReceivingPage() {
                         type:
                             'Receiving',
 
+                        documentDate,
+
+                        supplyInvoiceId: null,
+
                         supplier:
                             supplier.trim() ||
                             null,
@@ -798,6 +830,8 @@ export default function ReceivingPage() {
                         externalNumber:
                             externalNumber.trim() ||
                             null,
+
+                        recipient: null,
 
                         comment:
                             comment.trim() ||
@@ -833,6 +867,7 @@ export default function ReceivingPage() {
 
             setSupplier('');
             setExternalNumber('');
+            setDocumentDate(new Date().toISOString().slice(0, 10));
             setComment('');
             setLines([]);
             setSearch('');
@@ -990,10 +1025,20 @@ export default function ReceivingPage() {
                                         .value,
                                 )
                             }
-                            placeholder="Например: 4587 от 08.08.2026"
+                            placeholder="Например: 4587"
                             style={
                                 styles.input
                             }
+                        />
+                    </label>
+
+                    <label style={styles.field}>
+                        <span>Дата накладной</span>
+                        <input
+                            type="date"
+                            value={documentDate}
+                            onChange={event => setDocumentDate(event.target.value)}
+                            style={styles.input}
                         />
                     </label>
 
@@ -1148,22 +1193,15 @@ export default function ReceivingPage() {
                                             Выберите материал
                                         </option>
 
-                                        {standardGroups.map(
-                                            group => (
-                                                <option
-                                                    key={
-                                                        group.name
-                                                    }
-                                                    value={
-                                                        group.name
-                                                    }
-                                                >
-                                                    {
-                                                        group.name
-                                                    }
-                                                </option>
-                                            ),
-                                        )}
+                                        {standardGroupsByCategory.map(category => (
+                                            <optgroup key={category.id} label={category.name}>
+                                                {category.groups.map(group => (
+                                                    <option key={group.key} value={group.key}>
+                                                        {group.name}
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+                                        ))}
                                     </select>
                                 </label>
 

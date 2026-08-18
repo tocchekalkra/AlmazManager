@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System.Data;
+using Microsoft.EntityFrameworkCore;
 using AlmazManager.Domain.Entities;
 using AlmazManager.Domain.Interfaces;
 using AlmazManager.Infrastructure.Database;
@@ -32,6 +33,30 @@ public sealed class WarehouseDocumentRepository :
             .OrderByDescending(
                 x => x.CreatedAtUtc)
             .ToListAsync();
+    }
+
+    public async Task<int> ReserveNextNumberAsync(
+        AlmazManager.Domain.Enums.WarehouseDocumentType type)
+    {
+        await using var transaction =
+            await _db.Database.BeginTransactionAsync(
+                IsolationLevel.Serializable);
+
+        var sequence =
+            await _db.WarehouseDocumentSequences
+                .FirstOrDefaultAsync(x => x.Type == type);
+
+        if (sequence is null)
+        {
+            sequence = new WarehouseDocumentSequence(type);
+            await _db.WarehouseDocumentSequences.AddAsync(sequence);
+        }
+
+        var number = sequence.TakeNext();
+        await _db.SaveChangesAsync();
+        await transaction.CommitAsync();
+
+        return number;
     }
 
     public async Task AddAsync(

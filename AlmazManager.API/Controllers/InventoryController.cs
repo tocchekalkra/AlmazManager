@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using AlmazManager.Application.Features.Inventory.Commands;
 using AlmazManager.Application.Features.Inventory.Handlers;
 using AlmazManager.Contracts.Requests.Inventory;
@@ -8,6 +9,7 @@ namespace AlmazManager.API.Controllers;
 
 [ApiController]
 [Route("api/inventory")]
+[Authorize]
 public sealed class InventoryController : ControllerBase
 {
     private readonly InventoryAdjustmentHandler _adjustmentHandler;

@@ -1,4 +1,6 @@
-﻿using AlmazManager.Contracts.Responses.InventoryDocuments;
+﻿using AlmazManager.Application.Interfaces;
+using AlmazManager.Application.Security;
+using AlmazManager.Contracts.Responses.InventoryDocuments;
 using AlmazManager.Domain.Enums;
 using AlmazManager.Domain.Interfaces;
 
@@ -10,22 +12,33 @@ public sealed class CancelInventoryDocumentHandler
     private readonly IMaterialRepository _materialRepository;
     private readonly IStockRepository _stockRepository;
     private readonly IOperationRepository _operationRepository;
+    private readonly ICurrentUserService _currentUserService;
+    private readonly ISystemAccessService _systemAccessService;
+    private readonly IStockNotificationService _stockNotificationService;
 
     public CancelInventoryDocumentHandler(
         IInventoryDocumentRepository documentRepository,
         IMaterialRepository materialRepository,
         IStockRepository stockRepository,
-        IOperationRepository operationRepository)
+        IOperationRepository operationRepository,
+        ICurrentUserService currentUserService,
+        ISystemAccessService systemAccessService,
+        IStockNotificationService stockNotificationService)
     {
         _documentRepository = documentRepository;
         _materialRepository = materialRepository;
         _stockRepository = stockRepository;
         _operationRepository = operationRepository;
+        _currentUserService = currentUserService;
+        _systemAccessService = systemAccessService;
+        _stockNotificationService = stockNotificationService;
     }
 
     public async Task<InventoryDocumentResponse> HandleAsync(
         Guid documentId)
     {
+        await _systemAccessService.EnsureAccessAsync(SystemPermission.CancelDocuments);
+
         var document =
             await _documentRepository.GetByIdAsync(
                 documentId);
@@ -74,6 +87,8 @@ public sealed class CancelInventoryDocumentHandler
             }
         }
 
+        var stockChanges = new List<(Domain.Entities.Material Material, decimal Before, decimal After)>();
+
         foreach (var original in originalOperations
                      .Where(x =>
                          x.Type == OperationType.Inventory &&
@@ -103,7 +118,7 @@ public sealed class CancelInventoryDocumentHandler
                     before,
                     reversalChange,
                     stock.Quantity,
-                    document.UserId,
+                    _currentUserService.UserId,
                     document.Id,
                     true,
                     original.Id,
@@ -111,11 +126,23 @@ public sealed class CancelInventoryDocumentHandler
 
             await _operationRepository.AddAsync(
                 reversal);
+
+            var material = await _materialRepository.GetByIdAsync(original.MaterialId)
+                ?? throw new InvalidOperationException("Материал не найден.");
+            stockChanges.Add((material, before, stock.Quantity));
         }
 
         document.Cancel();
 
         await _documentRepository.SaveChangesAsync();
+
+        foreach (var change in stockChanges)
+        {
+            await _stockNotificationService.HandleStockChangeAsync(
+                change.Material,
+                change.Before,
+                change.After);
+        }
 
         return await InventoryDocumentMapper.MapAsync(
             document,

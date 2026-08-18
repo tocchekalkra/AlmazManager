@@ -34,6 +34,18 @@ public sealed class WarehouseDocumentConfiguration :
             .IsRequired();
 
         builder.Property(
+                x => x.SequenceNumber)
+            .IsRequired(false);
+
+        builder.Property(
+                x => x.DocumentDate)
+            .HasColumnType("date")
+            .IsRequired();
+
+        builder.Property(x => x.SupplyInvoiceId)
+            .IsRequired(false);
+
+        builder.Property(
                 x => x.Supplier)
             .HasMaxLength(250)
             .IsRequired(false);
@@ -41,6 +53,11 @@ public sealed class WarehouseDocumentConfiguration :
         builder.Property(
                 x => x.ExternalNumber)
             .HasMaxLength(100)
+            .IsRequired(false);
+
+        builder.Property(
+                x => x.Recipient)
+            .HasMaxLength(250)
             .IsRequired(false);
 
         builder.Property(
@@ -68,6 +85,14 @@ public sealed class WarehouseDocumentConfiguration :
                 x => x.Number)
             .IsUnique();
 
+        builder.HasIndex(x => new
+            {
+                x.Type,
+                x.SequenceNumber
+            })
+            .IsUnique()
+            .HasFilter("\"SequenceNumber\" IS NOT NULL");
+
         builder.HasIndex(
             x => x.Type);
 
@@ -76,6 +101,8 @@ public sealed class WarehouseDocumentConfiguration :
 
         builder.HasIndex(
             x => x.UserId);
+
+        builder.HasIndex(x => x.SupplyInvoiceId);
 
         builder.HasOne<AppUser>()
             .WithMany()

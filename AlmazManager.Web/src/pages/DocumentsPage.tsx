@@ -6,11 +6,6 @@ import {
 } from 'react';
 
 import {
-    ArrowDownToLine,
-    ArrowUpFromLine,
-    Ban,
-    Clock3,
-    Eye,
     FileText,
     RefreshCcw,
     RotateCcw,
@@ -19,6 +14,22 @@ import {
 } from 'lucide-react';
 
 import api from '../api/api';
+import { loadAllMaterialCatalogItems } from '../api/catalog';
+import { useAuth } from '../auth/AuthContext';
+import { useSearchParams } from 'react-router-dom';
+import { materialDisplayName } from '../utils/material';
+
+type MaterialItem = {
+    id: string;
+    name: string;
+    article: string;
+    unit: string;
+    widthMeters?: number | null;
+    kind?: string | null;
+    colorCode?: string | null;
+    colorName?: string | null;
+    isActive: boolean;
+};
 
 type WarehouseDocumentItem = {
     id: string;
@@ -28,138 +39,113 @@ type WarehouseDocumentItem = {
 
 type WarehouseDocument = {
     id: string;
-
     number: string;
-
-    type: string;
+    type: 'Receiving' | 'Issue';
     status: string;
-
     userId: string;
-
+    sequenceNumber?: number | null;
+    documentDate: string;
+    supplyInvoiceId?: string | null;
     supplier?: string | null;
     externalNumber?: string | null;
+    recipient?: string | null;
     comment?: string | null;
-
     createdAtUtc: string;
-
     postedAtUtc?: string | null;
     cancelledAtUtc?: string | null;
-
     items: WarehouseDocumentItem[];
 };
 
-type MaterialCatalogItem = {
+type InventoryDocumentItem = {
     id: string;
-
-    name: string;
-    article: string;
-
-    categoryId: string;
-
+    materialId: string;
+    materialName: string;
+    article?: string | null;
     unit: string;
-
-    minimumQuantity: number;
-    currentQuantity: number;
-
-    belowMinimum: boolean;
-    isActive: boolean;
-
-    kind: string;
-
-    widthMeters?: number | null;
-
-    colorCode?: string | null;
-    colorName?: string | null;
-    colorHex?: string | null;
+    expectedQuantity: number;
+    actualQuantity: number;
+    difference: number;
 };
 
-type MaterialCatalogResponse = {
-    page: number;
-    pageSize: number;
-
-    totalCount: number;
-    totalPages: number;
-
-    items: MaterialCatalogItem[];
+type InventoryDocument = {
+    id: string;
+    number: string;
+    userId: string;
+    comment?: string | null;
+    status: string;
+    createdAtUtc: string;
+    postedAtUtc?: string | null;
+    cancelledAtUtc?: string | null;
+    totalItems: number;
+    changedItems: number;
+    items: InventoryDocumentItem[];
 };
 
-const numberFormatter =
-    new Intl.NumberFormat(
-        'ru-RU',
-        {
-            maximumFractionDigits: 2,
-        },
-    );
+type UnifiedDocument =
+    | { source: 'warehouse'; data: WarehouseDocument }
+    | { source: 'inventory'; data: InventoryDocument };
+
+const numberFormatter = new Intl.NumberFormat('ru-RU', {
+    maximumFractionDigits: 2,
+});
 
 export default function DocumentsPage() {
-    const [
-        documents,
-        setDocuments,
-    ] =
-        useState<
-            WarehouseDocument[]
-        >([]);
+    const { user } = useAuth();
+    const isAdministrator = user?.role === 'Administrator';
+    const [searchParams] = useSearchParams();
+    const [canCancelDocuments, setCanCancelDocuments] = useState(isAdministrator);
+    const [warehouseDocuments, setWarehouseDocuments] = useState<WarehouseDocument[]>([]);
+    const [inventoryDocuments, setInventoryDocuments] = useState<InventoryDocument[]>([]);
+    const [materials, setMaterials] = useState<MaterialItem[]>([]);
+    const [selected, setSelected] = useState<UnifiedDocument | null>(null);
+    const [typeFilter, setTypeFilter] = useState(searchParams.get('type') ?? 'all');
+    const [statusFilter, setStatusFilter] = useState('all');
+    const [search, setSearch] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [working, setWorking] = useState(false);
+    const [error, setError] = useState('');
 
-    const [
-        materials,
-        setMaterials,
-    ] =
-        useState<
-            MaterialCatalogItem[]
-        >([]);
+    const materialById = useMemo(
+        () => new Map(materials.map((material) => [material.id, material])),
+        [materials],
+    );
 
-    const [
-        loading,
-        setLoading,
-    ] =
-        useState(true);
+    const documents = useMemo<UnifiedDocument[]>(() => [
+        ...warehouseDocuments.map((data): UnifiedDocument => ({ source: 'warehouse', data })),
+        ...inventoryDocuments.map((data): UnifiedDocument => ({ source: 'inventory', data })),
+    ].sort((a, b) =>
+        new Date(b.data.createdAtUtc).getTime() - new Date(a.data.createdAtUtc).getTime(),
+    ), [warehouseDocuments, inventoryDocuments]);
 
-    const [
-        cancelling,
-        setCancelling,
-    ] =
-        useState(false);
+    const filteredDocuments = useMemo(() => {
+        const normalized = search.trim().toLowerCase();
 
-    const [
-        error,
-        setError,
-    ] =
-        useState('');
+        return documents.filter((document) => {
+            const type = getDocumentType(document);
+            const typeMatches = typeFilter === 'all' || type === typeFilter;
+            const statusMatches = statusFilter === 'all' || document.data.status === statusFilter;
 
-    const [
-        success,
-        setSuccess,
-    ] =
-        useState('');
+            const searchable = [
+                document.data.number,
+                document.data.comment,
+                document.source === 'warehouse' ? document.data.supplier : null,
+                document.source === 'warehouse' ? document.data.externalNumber : null,
+                document.source === 'warehouse' ? document.data.recipient : null,
+                document.source === 'warehouse' ? document.data.documentDate : null,
+            ]
+                .filter(Boolean)
+                .join(' ')
+                .toLowerCase();
 
-    const [
-        search,
-        setSearch,
-    ] =
-        useState('');
-
-    const [
-        typeFilter,
-        setTypeFilter,
-    ] =
-        useState('all');
-
-    const [
-        statusFilter,
-        setStatusFilter,
-    ] =
-        useState('all');
-
-    const [
-        selectedDocument,
-        setSelectedDocument,
-    ] =
-        useState<
-            WarehouseDocument | null
-        >(null);
+            return typeMatches && statusMatches && (!normalized || searchable.includes(normalized));
+        });
+    }, [documents, search, statusFilter, typeFilter]);
 
     useEffect(() => {
-        loadData();
+        void loadData();
+        api.get<{ canCancelDocuments: boolean }>('/users/me/access')
+            .then((response) => setCanCancelDocuments(response.data.canCancelDocuments))
+            .catch(() => setCanCancelDocuments(isAdministrator));
     }, []);
 
     async function loadData() {
@@ -167,51 +153,36 @@ export default function DocumentsPage() {
             setLoading(true);
             setError('');
 
-            const [
-                documentsResponse,
-                materialsResponse,
-            ] =
-                await Promise.all([
-                    api.get<
-                        WarehouseDocument[]
-                    >(
-                        '/documents',
-                    ),
+            const [warehouseResponse, inventoryResponse, materialItems] = await Promise.all([
+                api.get<WarehouseDocument[]>('/documents'),
+                api.get<InventoryDocument[]>('/inventory-documents'),
+                loadAllMaterialCatalogItems<MaterialItem>(),
+            ]);
 
-                    api.get<
-                        MaterialCatalogResponse
-                    >(
-                        '/materials/catalog?pageSize=100',
-                    ),
-                ]);
+            setWarehouseDocuments(warehouseResponse.data ?? []);
+            setInventoryDocuments(inventoryResponse.data ?? []);
+            setMaterials(materialItems);
 
-            setDocuments(
-                documentsResponse.data ??
-                [],
-            );
+            const requestedDocumentId = searchParams.get('document');
+            if (requestedDocumentId) {
+                const requested = [
+                    ...warehouseResponse.data.map((data): UnifiedDocument => ({ source: 'warehouse', data })),
+                    ...inventoryResponse.data.map((data): UnifiedDocument => ({ source: 'inventory', data })),
+                ].find((item) => item.data.id === requestedDocumentId);
+                if (requested) setSelected(requested);
+            }
 
-            setMaterials(
-                materialsResponse
-                    .data
-                    .items ?? [],
-            );
-        } catch (
-        requestError: any
-        ) {
-            console.error(
-                'Ошибка загрузки документов:',
-                requestError,
-            );
+            if (selected) {
+                const refreshed = [
+                    ...warehouseResponse.data.map((data): UnifiedDocument => ({ source: 'warehouse', data })),
+                    ...inventoryResponse.data.map((data): UnifiedDocument => ({ source: 'inventory', data })),
+                ].find((item) => item.data.id === selected.data.id);
 
+                setSelected(refreshed ?? null);
+            }
+        } catch (requestError: any) {
             setError(
-                requestError
-                    ?.response
-                    ?.data
-                    ?.message ??
-                requestError
-                    ?.response
-                    ?.data
-                    ?.title ??
+                requestError?.response?.data?.message ??
                 'Не удалось загрузить документы.',
             );
         } finally {
@@ -219,222 +190,32 @@ export default function DocumentsPage() {
         }
     }
 
-    const materialMap =
-        useMemo(
-            () =>
-                new Map(
-                    materials.map(
-                        material => [
-                            material.id,
-                            material,
-                        ],
-                    ),
-                ),
-            [materials],
-        );
-
-    const filteredDocuments =
-        useMemo(() => {
-            const normalized =
-                search
-                    .trim()
-                    .toLowerCase();
-
-            return documents
-                .filter(
-                    document => {
-                        const matchesSearch =
-                            !normalized ||
-                            document.number
-                                .toLowerCase()
-                                .includes(
-                                    normalized,
-                                ) ||
-                            (
-                                document.supplier ??
-                                ''
-                            )
-                                .toLowerCase()
-                                .includes(
-                                    normalized,
-                                ) ||
-                            (
-                                document.externalNumber ??
-                                ''
-                            )
-                                .toLowerCase()
-                                .includes(
-                                    normalized,
-                                ) ||
-                            (
-                                document.comment ??
-                                ''
-                            )
-                                .toLowerCase()
-                                .includes(
-                                    normalized,
-                                );
-
-                        const matchesType =
-                            typeFilter ===
-                            'all' ||
-                            document.type ===
-                            typeFilter;
-
-                        const matchesStatus =
-                            statusFilter ===
-                            'all' ||
-                            document.status ===
-                            statusFilter;
-
-                        return (
-                            matchesSearch &&
-                            matchesType &&
-                            matchesStatus
-                        );
-                    },
-                )
-                .sort(
-                    (
-                        a,
-                        b,
-                    ) =>
-                        new Date(
-                            b.createdAtUtc,
-                        ).getTime() -
-                        new Date(
-                            a.createdAtUtc,
-                        ).getTime(),
-                );
-        }, [
-            documents,
-            search,
-            typeFilter,
-            statusFilter,
-        ]);
-
-    const receivingCount =
-        documents.filter(
-            document =>
-                document.type ===
-                'Receiving',
-        ).length;
-
-    const issueCount =
-        documents.filter(
-            document =>
-                document.type ===
-                'Issue',
-        ).length;
-
-    const postedCount =
-        documents.filter(
-            document =>
-                document.status ===
-                'Posted',
-        ).length;
-
-    const cancelledCount =
-        documents.filter(
-            document =>
-                document.status ===
-                'Cancelled',
-        ).length;
-
-    async function openDocument(
-        document: WarehouseDocument,
-    ) {
-        try {
-            setError('');
-
-            const response =
-                await api.get<
-                    WarehouseDocument
-                >(
-                    `/documents/${document.id}`,
-                );
-
-            setSelectedDocument(
-                response.data,
-            );
-        } catch (
-        requestError: any
-        ) {
-            setError(
-                requestError
-                    ?.response
-                    ?.data
-                    ?.message ??
-                'Не удалось открыть документ.',
-            );
-        }
-    }
-
-    function closeDocument() {
-        if (cancelling) {
+    async function cancelDocument(document: UnifiedDocument) {
+        if (!canCancelDocuments || document.data.status !== 'Posted') {
             return;
         }
 
-        setSelectedDocument(
-            null,
-        );
-    }
-
-    async function cancelDocument(
-        document: WarehouseDocument,
-    ) {
-        const confirmed =
-            window.confirm(
-                `Отменить документ ${document.number}?\n\n` +
-                'Складские движения будут выполнены в обратную сторону.',
-            );
-
-        if (!confirmed) {
+        if (!window.confirm(`Отменить проведённый документ ${document.data.number}?`)) {
             return;
         }
 
         try {
-            setCancelling(true);
+            setWorking(true);
             setError('');
-            setSuccess('');
 
-            const response =
-                await api.post<
-                    WarehouseDocument
-                >(
-                    `/documents/${document.id}/cancel`,
-                );
+            const endpoint = document.source === 'warehouse'
+                ? `/documents/${document.data.id}/cancel`
+                : `/inventory-documents/${document.data.id}/cancel`;
 
-            setSuccess(
-                `Документ ${response.data.number} успешно отменён.`,
-            );
-
-            setSelectedDocument(
-                response.data,
-            );
-
+            await api.post(endpoint);
             await loadData();
-        } catch (
-        requestError: any
-        ) {
-            console.error(
-                'Ошибка отмены документа:',
-                requestError,
-            );
-
+        } catch (requestError: any) {
             setError(
-                requestError
-                    ?.response
-                    ?.data
-                    ?.message ??
-                requestError
-                    ?.response
-                    ?.data
-                    ?.title ??
+                requestError?.response?.data?.message ??
                 'Не удалось отменить документ.',
             );
         } finally {
-            setCancelling(false);
+            setWorking(false);
         }
     }
 
@@ -442,1758 +223,270 @@ export default function DocumentsPage() {
         <div className="page">
             <div className="page-heading">
                 <div>
-                    <p className="eyebrow">
-                        WAREHOUSE
-                    </p>
-
-                    <h1>
-                        Документы
-                    </h1>
-
-                    <p>
-                        История приходов,
-                        расходов и складских
-                        документов.
-                    </p>
+                    <p className="eyebrow">DOCUMENTS</p>
+                    <h1>Документы</h1>
+                    <p>Приход, расход и инвентаризация в едином журнале.</p>
                 </div>
 
                 <button
                     type="button"
                     className="button secondary"
-                    onClick={
-                        loadData
-                    }
+                    onClick={() => void loadData()}
                 >
-                    <RefreshCcw
-                        size={17}
-                    />
-
+                    <RefreshCcw size={17} />
                     Обновить
                 </button>
             </div>
 
-            <section className="stats-grid">
-                <DocumentStat
-                    icon={
-                        <FileText />
-                    }
-                    value={
-                        documents.length
-                    }
-                    label="Всего документов"
-                />
+            <section className="panel" style={styles.filters}>
+                <label style={styles.searchBox}>
+                    <Search size={17} />
+                    <input
+                        value={search}
+                        onChange={(event) => setSearch(event.target.value)}
+                        placeholder="Номер, поставщик, накладная..."
+                        style={styles.searchInput}
+                    />
+                </label>
 
-                <DocumentStat
-                    icon={
-                        <ArrowDownToLine />
-                    }
-                    value={
-                        receivingCount
-                    }
-                    label="Приходов"
-                />
+                <select
+                    value={typeFilter}
+                    onChange={(event) => setTypeFilter(event.target.value)}
+                    style={styles.control}
+                >
+                    <option value="all">Все типы</option>
+                    <option value="Receiving">Приход</option>
+                    <option value="Issue">Расход</option>
+                    <option value="Inventory">Инвентаризация</option>
+                </select>
 
-                <DocumentStat
-                    icon={
-                        <ArrowUpFromLine />
-                    }
-                    value={
-                        issueCount
-                    }
-                    label="Расходов"
-                />
-
-                <DocumentStat
-                    icon={
-                        <Clock3 />
-                    }
-                    value={
-                        postedCount
-                    }
-                    label={`Проведено · отменено ${cancelledCount}`}
-                />
+                <select
+                    value={statusFilter}
+                    onChange={(event) => setStatusFilter(event.target.value)}
+                    style={styles.control}
+                >
+                    <option value="all">Все статусы</option>
+                    <option value="Draft">Черновики</option>
+                    <option value="Posted">Проведённые</option>
+                    <option value="Cancelled">Отменённые</option>
+                </select>
             </section>
 
-            {error && (
-                <div
-                    style={
-                        styles.errorBox
-                    }
-                >
-                    {error}
-                </div>
-            )}
+            {error && <div style={styles.error}>{error}</div>}
 
-            {success && (
-                <div
-                    style={
-                        styles.successBox
-                    }
-                >
-                    {success}
-                </div>
-            )}
-
-            <section className="panel">
-                <div
-                    style={
-                        styles.toolbar
-                    }
-                >
-                    <div
-                        style={
-                            styles.searchBox
-                        }
-                    >
-                        <Search
-                            size={17}
-                        />
-
-                        <input
-                            value={
-                                search
-                            }
-                            onChange={
-                                event =>
-                                    setSearch(
-                                        event
-                                            .target
-                                            .value,
-                                    )
-                            }
-                            placeholder="Номер документа, поставщик, накладная..."
-                            style={
-                                styles.searchInput
-                            }
-                        />
-                    </div>
-
-                    <select
-                        value={
-                            typeFilter
-                        }
-                        onChange={
-                            event =>
-                                setTypeFilter(
-                                    event
-                                        .target
-                                        .value,
-                                )
-                        }
-                        style={
-                            styles.select
-                        }
-                    >
-                        <option value="all">
-                            Все типы
-                        </option>
-
-                        <option value="Receiving">
-                            Приход
-                        </option>
-
-                        <option value="Issue">
-                            Расход
-                        </option>
-                    </select>
-
-                    <select
-                        value={
-                            statusFilter
-                        }
-                        onChange={
-                            event =>
-                                setStatusFilter(
-                                    event
-                                        .target
-                                        .value,
-                                )
-                        }
-                        style={
-                            styles.select
-                        }
-                    >
-                        <option value="all">
-                            Все статусы
-                        </option>
-
-                        <option value="Draft">
-                            Черновики
-                        </option>
-
-                        <option value="Posted">
-                            Проведённые
-                        </option>
-
-                        <option value="Cancelled">
-                            Отменённые
-                        </option>
-                    </select>
-                </div>
-
+            <section className="panel" style={{ marginTop: 15 }}>
                 <div className="table-wrapper">
                     <table className="data-table">
                         <thead>
                             <tr>
-                                <th>
-                                    Документ
-                                </th>
-
-                                <th>
-                                    Тип
-                                </th>
-
-                                <th>
-                                    Дата
-                                </th>
-
-                                <th>
-                                    Поставщик /
-                                    накладная
-                                </th>
-
-                                <th>
-                                    Позиций
-                                </th>
-
-                                <th>
-                                    Статус
-                                </th>
-
+                                <th>Номер</th>
+                                <th>Тип</th>
+                                <th>Дата</th>
+                                <th>Поставщик / накладная</th>
+                                <th>Позиций</th>
+                                <th>Статус</th>
                                 <th />
                             </tr>
                         </thead>
-
                         <tbody>
-                            {loading && (
-                                <tr>
-                                    <td
-                                        colSpan={
-                                            7
-                                        }
-                                    >
-                                        Загрузка
-                                        документов...
+                            {!loading && filteredDocuments.map((document) => (
+                                <tr
+                                    key={`${document.source}-${document.data.id}`}
+                                    style={styles.clickableRow}
+                                    onClick={() => setSelected(document)}
+                                >
+                                    <td><strong>{document.data.number}</strong></td>
+                                    <td>{documentTypeLabel(getDocumentType(document))}</td>
+                                    <td>{document.source === 'warehouse' ? new Date(`${document.data.documentDate}T00:00:00`).toLocaleDateString('ru-RU') : new Date(document.data.createdAtUtc).toLocaleString('ru-RU')}</td>
+                                    <td>
+                                        {document.source === 'warehouse'
+                                            ? [document.data.type === 'Issue' ? document.data.recipient : document.data.supplier, document.data.externalNumber]
+                                                .filter(Boolean)
+                                                .join(' · ') || '—'
+                                            : '—'}
                                     </td>
+                                    <td>{document.data.items.length}</td>
+                                    <td>
+                                        <span style={statusStyle(document.data.status)}>
+                                            {statusLabel(document.data.status)}
+                                        </span>
+                                    </td>
+                                    <td><FileText size={16} /></td>
                                 </tr>
-                            )}
-
-                            {!loading &&
-                                filteredDocuments.length ===
-                                0 && (
-                                    <tr>
-                                        <td
-                                            colSpan={
-                                                7
-                                            }
-                                        >
-                                            Документы
-                                            не найдены.
-                                        </td>
-                                    </tr>
-                                )}
-
-                            {!loading &&
-                                filteredDocuments.map(
-                                    document => (
-                                        <tr
-                                            key={
-                                                document.id
-                                            }
-                                        >
-                                            <td>
-                                                <div
-                                                    style={
-                                                        styles.documentNumberCell
-                                                    }
-                                                >
-                                                    <strong>
-                                                        {
-                                                            document.number
-                                                        }
-                                                    </strong>
-
-                                                    {document.externalNumber && (
-                                                        <span
-                                                            style={
-                                                                styles.smallText
-                                                            }
-                                                        >
-                                                            Внешний №{' '}
-                                                            {
-                                                                document.externalNumber
-                                                            }
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </td>
-
-                                            <td>
-                                                <DocumentTypeBadge
-                                                    type={
-                                                        document.type
-                                                    }
-                                                />
-                                            </td>
-
-                                            <td>
-                                                <div
-                                                    style={
-                                                        styles.dateCell
-                                                    }
-                                                >
-                                                    <strong>
-                                                        {formatDate(
-                                                            document.createdAtUtc,
-                                                        )}
-                                                    </strong>
-
-                                                    <span>
-                                                        {formatTime(
-                                                            document.createdAtUtc,
-                                                        )}
-                                                    </span>
-                                                </div>
-                                            </td>
-
-                                            <td>
-                                                <div
-                                                    style={
-                                                        styles.supplierCell
-                                                    }
-                                                >
-                                                    <strong>
-                                                        {document.supplier ||
-                                                            '—'}
-                                                    </strong>
-
-                                                    {document.externalNumber && (
-                                                        <span>
-                                                            {
-                                                                document.externalNumber
-                                                            }
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </td>
-
-                                            <td>
-                                                <strong>
-                                                    {
-                                                        document
-                                                            .items
-                                                            .length
-                                                    }
-                                                </strong>
-                                            </td>
-
-                                            <td>
-                                                <DocumentStatusBadge
-                                                    status={
-                                                        document.status
-                                                    }
-                                                />
-                                            </td>
-
-                                            <td>
-                                                <button
-                                                    type="button"
-                                                    style={
-                                                        styles.iconButton
-                                                    }
-                                                    onClick={() =>
-                                                        openDocument(
-                                                            document,
-                                                        )
-                                                    }
-                                                    title="Открыть документ"
-                                                >
-                                                    <Eye
-                                                        size={
-                                                            17
-                                                        }
-                                                    />
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ),
-                                )}
+                            ))}
                         </tbody>
                     </table>
                 </div>
 
-                <div
-                    style={
-                        styles.tableFooter
-                    }
-                >
-                    Показано:{' '}
-                    <strong>
-                        {
-                            filteredDocuments.length
-                        }
-                    </strong>{' '}
-                    из{' '}
-                    <strong>
-                        {
-                            documents.length
-                        }
-                    </strong>
-                </div>
+                {loading && <div style={styles.empty}>Загрузка документов...</div>}
+                {!loading && filteredDocuments.length === 0 && (
+                    <div style={styles.empty}>Документы не найдены.</div>
+                )}
             </section>
 
-            {selectedDocument && (
-                <div
-                    style={
-                        styles.overlay
-                    }
-                    onMouseDown={
-                        event => {
-                            if (
-                                event.target ===
-                                event.currentTarget
-                            ) {
-                                closeDocument();
-                            }
-                        }
-                    }
-                >
-                    <section
-                        style={
-                            styles.modal
-                        }
-                    >
-                        <div
-                            style={
-                                styles.modalHeader
-                            }
-                        >
+            {selected && (
+                <div style={styles.overlay} onMouseDown={() => setSelected(null)}>
+                    <div style={styles.modal} onMouseDown={(event) => event.stopPropagation()}>
+                        <div style={styles.modalHeader}>
                             <div>
-                                <p className="eyebrow">
-                                    WAREHOUSE
-                                    DOCUMENT
-                                </p>
-
-                                <h2
-                                    style={{
-                                        margin:
-                                            '4px 0 0',
-                                    }}
-                                >
-                                    {
-                                        selectedDocument.number
-                                    }
-                                </h2>
+                                <p className="eyebrow">{documentTypeLabel(getDocumentType(selected))}</p>
+                                <h2 style={{ margin: 0 }}>{selected.data.number}</h2>
                             </div>
-
-                            <button
-                                type="button"
-                                style={
-                                    styles.closeButton
-                                }
-                                onClick={
-                                    closeDocument
-                                }
-                            >
-                                <X
-                                    size={
-                                        20
-                                    }
-                                />
+                            <button type="button" style={styles.iconButton} onClick={() => setSelected(null)}>
+                                <X size={20} />
                             </button>
                         </div>
 
-                        <div
-                            style={
-                                styles.documentInfoGrid
-                            }
-                        >
-                            <InfoCard
-                                label="Тип"
-                                value={
-                                    selectedDocument.type ===
-                                        'Receiving'
-                                        ? 'Приход'
-                                        : selectedDocument.type ===
-                                            'Issue'
-                                            ? 'Расход'
-                                            : selectedDocument.type
-                                }
-                            />
-
-                            <InfoCard
-                                label="Статус"
-                                value={
-                                    getStatusLabel(
-                                        selectedDocument.status,
-                                    )
-                                }
-                            />
-
-                            <InfoCard
-                                label="Создан"
-                                value={`${formatDate(
-                                    selectedDocument.createdAtUtc,
-                                )} ${formatTime(
-                                    selectedDocument.createdAtUtc,
-                                )}`}
-                            />
-
-                            <InfoCard
-                                label="Проведён"
-                                value={
-                                    selectedDocument.postedAtUtc
-                                        ? `${formatDate(
-                                            selectedDocument.postedAtUtc,
-                                        )} ${formatTime(
-                                            selectedDocument.postedAtUtc,
-                                        )}`
-                                        : '—'
-                                }
-                            />
-
-                            <InfoCard
-                                label="Поставщик"
-                                value={
-                                    selectedDocument.supplier ||
-                                    '—'
-                                }
-                            />
-
-                            <InfoCard
-                                label="Накладная"
-                                value={
-                                    selectedDocument.externalNumber ||
-                                    '—'
-                                }
-                            />
-                        </div>
-
-                        {selectedDocument.comment && (
-                            <div
-                                style={
-                                    styles.commentBox
-                                }
-                            >
-                                <span
-                                    style={
-                                        styles.smallText
-                                    }
-                                >
-                                    Комментарий
-                                </span>
-
-                                <div>
-                                    {
-                                        selectedDocument.comment
-                                    }
-                                </div>
-                            </div>
-                        )}
-
-                        <div
-                            style={
-                                styles.itemsHeader
-                            }
-                        >
-                            <div>
-                                <p className="eyebrow">
-                                    DOCUMENT
-                                    ITEMS
-                                </p>
-
-                                <h3
-                                    style={{
-                                        margin:
-                                            '3px 0 0',
-                                    }}
-                                >
-                                    Состав документа
-                                </h3>
-                            </div>
-
-                            <div
-                                style={
-                                    styles.itemsCounter
-                                }
-                            >
-                                {
-                                    selectedDocument
-                                        .items
-                                        .length
-                                }{' '}
-                                поз.
-                            </div>
+                        <div style={styles.metaGrid}>
+                            <Meta label="Статус" value={statusLabel(selected.data.status)} />
+                            <Meta label="Создан" value={new Date(selected.data.createdAtUtc).toLocaleString('ru-RU')} />
+                            <Meta label="Проведён" value={selected.data.postedAtUtc ? new Date(selected.data.postedAtUtc).toLocaleString('ru-RU') : '—'} />
+                            <Meta label="Комментарий" value={selected.data.comment || '—'} />
+                            {selected.source === 'warehouse' && (
+                                <>
+                                    <Meta label="Поставщик" value={selected.data.supplier || '—'} />
+                                    <Meta label="Накладная" value={selected.data.externalNumber || '—'} />
+                                </>
+                            )}
                         </div>
 
                         <div className="table-wrapper">
                             <table className="data-table">
                                 <thead>
                                     <tr>
-                                        <th>
-                                            Материал
-                                        </th>
-
-                                        <th>
-                                            Ширина
-                                        </th>
-
-                                        <th>
-                                            Артикул
-                                        </th>
-
-                                        <th>
-                                            Количество
-                                        </th>
+                                        <th>Материал</th>
+                                        {selected.source === 'inventory' && <th>По системе</th>}
+                                        {selected.source === 'inventory' && <th>Факт</th>}
+                                        {selected.source === 'inventory' && <th>Разница</th>}
+                                        {selected.source === 'warehouse' && <th>Количество</th>}
                                     </tr>
                                 </thead>
-
                                 <tbody>
-                                    {selectedDocument.items.map(
-                                        item => {
-                                            const material =
-                                                materialMap.get(
-                                                    item.materialId,
-                                                );
-
+                                    {selected.source === 'warehouse'
+                                        ? selected.data.items.map((item) => {
+                                            const material = materialById.get(item.materialId);
                                             return (
-                                                <tr
-                                                    key={
-                                                        item.id
-                                                    }
-                                                >
+                                                <tr key={item.id}>
                                                     <td>
-                                                        <DocumentMaterialCell
-                                                            material={
-                                                                material
-                                                            }
-                                                            fallbackId={
-                                                                item.materialId
-                                                            }
-                                                        />
+                                                        <strong>{material ? materialDisplayName(material) : 'Архивный материал'}</strong>
+                                                        <div style={styles.subtle}>{material?.article ?? item.materialId}</div>
                                                     </td>
-
                                                     <td>
-                                                        {material
-                                                            ?.widthMeters
-                                                            ? formatWidth(
-                                                                material.widthMeters,
-                                                            )
-                                                            : '—'}
-                                                    </td>
-
-                                                    <td>
-                                                        {material
-                                                            ?.article ??
-                                                            '—'}
-                                                    </td>
-
-                                                    <td>
-                                                        <strong>
-                                                            {numberFormatter.format(
-                                                                item.quantity,
-                                                            )}{' '}
-                                                            {material?.kind ===
-                                                                'Oracal641'
-                                                                ? 'м'
-                                                                : 'шт.'}
-                                                        </strong>
+                                                        {numberFormatter.format(item.quantity)}{' '}
+                                                        {unitLabel(material?.unit ?? '')}
                                                     </td>
                                                 </tr>
                                             );
-                                        },
-                                    )}
+                                        })
+                                        : selected.data.items.map((item) => {
+                                            const material = materialById.get(item.materialId);
+                                            return <tr key={item.id}>
+                                                <td>
+                                                    <strong>{materialDisplayName({
+                                                        materialName: item.materialName,
+                                                        widthMeters: material?.widthMeters,
+                                                        kind: material?.kind,
+                                                        colorCode: material?.colorCode,
+                                                        colorName: material?.colorName,
+                                                    })}</strong>
+                                                    <div style={styles.subtle}>{item.article ?? '—'}</div>
+                                                </td>
+                                                <td>{numberFormatter.format(item.expectedQuantity)} {unitLabel(item.unit)}</td>
+                                                <td>{numberFormatter.format(item.actualQuantity)} {unitLabel(item.unit)}</td>
+                                                <td style={
+                                                    item.difference < 0
+                                                        ? styles.negative
+                                                        : item.difference > 0
+                                                            ? styles.positive
+                                                            : undefined
+                                                }>
+                                                    {item.difference > 0 ? '+' : ''}{numberFormatter.format(item.difference)}
+                                                </td>
+                                            </tr>;
+                                        })}
                                 </tbody>
                             </table>
                         </div>
 
-                        <div
-                            style={
-                                styles.modalFooter
-                            }
-                        >
-                            {selectedDocument.status ===
-                                'Cancelled' && (
-                                    <div
-                                        style={
-                                            styles.cancelledNotice
-                                        }
-                                    >
-                                        <Ban
-                                            size={
-                                                17
-                                            }
-                                        />
-
-                                        Документ
-                                        отменён
-                                        {selectedDocument.cancelledAtUtc
-                                            ? ` ${formatDate(
-                                                selectedDocument.cancelledAtUtc,
-                                            )} ${formatTime(
-                                                selectedDocument.cancelledAtUtc,
-                                            )}`
-                                            : ''}
-                                    </div>
-                                )}
-
-                            <div
-                                style={{
-                                    flex:
-                                        1,
-                                }}
-                            />
-
-                            <button
-                                type="button"
-                                className="button secondary"
-                                onClick={
-                                    closeDocument
-                                }
-                            >
-                                Закрыть
-                            </button>
-
-                            {selectedDocument.status ===
-                                'Posted' && (
-                                    <button
-                                        type="button"
-                                        style={
-                                            styles.cancelButton
-                                        }
-                                        disabled={
-                                            cancelling
-                                        }
-                                        onClick={() =>
-                                            cancelDocument(
-                                                selectedDocument,
-                                            )
-                                        }
-                                    >
-                                        <RotateCcw
-                                            size={
-                                                17
-                                            }
-                                        />
-
-                                        {cancelling
-                                            ? 'Отмена...'
-                                            : 'Отменить документ'}
-                                    </button>
-                                )}
-                        </div>
-                    </section>
+                        {canCancelDocuments && selected.data.status === 'Posted' && (
+                            <div style={styles.modalActions}>
+                                <button
+                                    type="button"
+                                    className="button secondary"
+                                    disabled={working}
+                                    onClick={() => void cancelDocument(selected)}
+                                >
+                                    <RotateCcw size={16} />
+                                    {working ? 'Отмена...' : 'Отменить документ'}
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
         </div>
     );
 }
 
-function DocumentMaterialCell({
-    material,
-    fallbackId,
-}: {
-    material?:
-    MaterialCatalogItem;
-
-    fallbackId:
-    string;
-}) {
-    if (!material) {
-        return (
-            <div>
-                <strong>
-                    Материал не найден
-                </strong>
-
-                <div
-                    style={
-                        styles.smallText
-                    }
-                >
-                    {fallbackId}
-                </div>
-            </div>
-        );
-    }
-
-    if (
-        material.kind ===
-        'Oracal641'
-    ) {
-        return (
-            <div
-                style={
-                    styles.materialCell
-                }
-            >
-                <div
-                    style={{
-                        ...styles.colorSwatch,
-
-                        background:
-                            material.colorHex ??
-                            '#777777',
-                    }}
-                />
-
-                <div>
-                    <strong>
-                        ORACAL 641{' '}
-                        {
-                            material.colorCode
-                        }{' '}
-                        {
-                            material.colorName
-                        }
-                    </strong>
-
-                    <div
-                        style={
-                            styles.smallText
-                        }
-                    >
-                        {
-                            material.article
-                        }
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
+function Meta({ label, value }: { label: string; value: string }) {
     return (
         <div>
-            <strong>
-                {normalizeMaterialName(
-                    material.name,
-                )}
-            </strong>
-
-            <div
-                style={
-                    styles.smallText
-                }
-            >
-                {
-                    material.article
-                }
-            </div>
+            <div style={styles.metaLabel}>{label}</div>
+            <div style={styles.metaValue}>{value}</div>
         </div>
     );
 }
 
-function DocumentTypeBadge({
-    type,
-}: {
-    type:
-    string;
-}) {
-    if (
-        type ===
-        'Receiving'
-    ) {
-        return (
-            <span
-                style={
-                    styles.receivingBadge
-                }
-            >
-                <ArrowDownToLine
-                    size={
-                        14
-                    }
-                />
-
-                Приход
-            </span>
-        );
-    }
-
-    if (
-        type ===
-        'Issue'
-    ) {
-        return (
-            <span
-                style={
-                    styles.issueBadge
-                }
-            >
-                <ArrowUpFromLine
-                    size={
-                        14
-                    }
-                />
-
-                Расход
-            </span>
-        );
-    }
-
-    return (
-        <span>
-            {type}
-        </span>
-    );
+function getDocumentType(document: UnifiedDocument) {
+    return document.source === 'inventory' ? 'Inventory' : document.data.type;
 }
 
-function DocumentStatusBadge({
-    status,
-}: {
-    status:
-    string;
-}) {
-    if (
-        status ===
-        'Posted'
-    ) {
-        return (
-            <span
-                style={
-                    styles.postedBadge
-                }
-            >
-                Проведён
-            </span>
-        );
-    }
-
-    if (
-        status ===
-        'Cancelled'
-    ) {
-        return (
-            <span
-                style={
-                    styles.cancelledBadge
-                }
-            >
-                Отменён
-            </span>
-        );
-    }
-
-    return (
-        <span
-            style={
-                styles.draftBadge
-            }
-        >
-            Черновик
-        </span>
-    );
+function documentTypeLabel(type: string) {
+    return type === 'Receiving' ? 'Приход' : type === 'Issue' ? 'Расход' : 'Инвентаризация';
 }
 
-function DocumentStat({
-    icon,
-    value,
-    label,
-}: {
-    icon:
-    React.ReactNode;
-
-    value:
-    number;
-
-    label:
-    string;
-}) {
-    return (
-        <article className="stat-card">
-            <div className="stat-icon">
-                {icon}
-            </div>
-
-            <div>
-                <div className="stat-label">
-                    {label}
-                </div>
-
-                <div className="stat-value">
-                    {value}
-                </div>
-            </div>
-        </article>
-    );
+function statusLabel(status: string) {
+    return status === 'Draft' ? 'Черновик' : status === 'Posted' ? 'Проведён' : status === 'Cancelled' ? 'Отменён' : status;
 }
 
-function InfoCard({
-    label,
-    value,
-}: {
-    label:
-    string;
-
-    value:
-    string;
-}) {
-    return (
-        <div
-            style={
-                styles.infoCard
-            }
-        >
-            <span
-                style={
-                    styles.infoLabel
-                }
-            >
-                {label}
-            </span>
-
-            <strong>
-                {value}
-            </strong>
-        </div>
-    );
+function statusStyle(status: string): CSSProperties {
+    if (status === 'Posted') return styles.statusPosted;
+    if (status === 'Cancelled') return styles.statusCancelled;
+    return styles.statusDraft;
 }
 
-function getStatusLabel(
-    status: string,
-) {
-    switch (
-    status
-    ) {
-        case 'Posted':
-            return 'Проведён';
-
-        case 'Cancelled':
-            return 'Отменён';
-
-        case 'Draft':
-            return 'Черновик';
-
-        default:
-            return status;
-    }
+function unitLabel(unit: string) {
+    const labels: Record<string, string> = {
+        Piece: 'шт.', Meter: 'м', SquareMeter: 'м²', Kilogram: 'кг',
+        Liter: 'л', Roll: 'рул.', Sheet: 'лист',
+    };
+    return labels[unit] ?? unit;
 }
 
-function formatDate(
-    value: string,
-) {
-    return new Intl.DateTimeFormat(
-        'ru-RU',
-        {
-            day:
-                '2-digit',
-
-            month:
-                '2-digit',
-
-            year:
-                'numeric',
-        },
-    ).format(
-        new Date(
-            value,
-        ),
-    );
-}
-
-function formatTime(
-    value: string,
-) {
-    return new Intl.DateTimeFormat(
-        'ru-RU',
-        {
-            hour:
-                '2-digit',
-
-            minute:
-                '2-digit',
-        },
-    ).format(
-        new Date(
-            value,
-        ),
-    );
-}
-
-function formatWidth(
-    value: number,
-) {
-    return `${value.toLocaleString(
-        'ru-RU',
-        {
-            minimumFractionDigits:
-                2,
-
-            maximumFractionDigits:
-                2,
-        },
-    )} м`;
-}
-
-function normalizeMaterialName(
-    name: string,
-) {
-    return name
-        .replace(
-            /\s+\d+[.,]\d+\s*м\s*$/i,
-            '',
-        )
-        .trim();
-}
-
-const styles: Record<
-    string,
-    CSSProperties
-> = {
-    toolbar: {
-        display:
-            'flex',
-
-        alignItems:
-            'center',
-
-        gap:
-            10,
-
-        padding:
-            16,
-
-        flexWrap:
-            'wrap',
-    },
-
+const styles: Record<string, CSSProperties> = {
+    filters: { display: 'grid', gridTemplateColumns: '1fr 200px 200px', gap: 10 },
     searchBox: {
-        flex:
-            '1 1 320px',
-
-        minHeight:
-            42,
-
-        display:
-            'flex',
-
-        alignItems:
-            'center',
-
-        gap:
-            9,
-
-        padding:
-            '0 12px',
-
-        border:
-            '1px solid #293542',
-
-        borderRadius:
-            10,
-
-        background:
-            '#111922',
+        display: 'flex', alignItems: 'center', gap: 9,
+        border: '1px solid #273040', borderRadius: 10,
+        padding: '0 11px', minHeight: 42, color: '#748094',
     },
-
-    searchInput: {
-        flex:
-            1,
-
-        minWidth:
-            0,
-
-        border:
-            0,
-
-        outline:
-            0,
-
-        background:
-            'transparent',
-
-        color:
-            '#fff',
-    },
-
-    select: {
-        minHeight:
-            42,
-
-        padding:
-            '0 12px',
-
-        border:
-            '1px solid #293542',
-
-        borderRadius:
-            10,
-
-        background:
-            '#111922',
-
-        color:
-            '#fff',
-    },
-
-    documentNumberCell: {
-        display:
-            'grid',
-
-        gap:
-            3,
-    },
-
-    supplierCell: {
-        display:
-            'grid',
-
-        gap:
-            3,
-    },
-
-    supplierCellSpan: {
-        color:
-            '#77879a',
-    },
-
-    dateCell: {
-        display:
-            'grid',
-
-        gap:
-            2,
-    },
-
-    smallText: {
-        color:
-            '#718096',
-
-        fontSize:
-            10,
-
-        fontWeight:
-            400,
-
-        overflowWrap:
-            'anywhere',
-    },
-
-    receivingBadge: {
-        display:
-            'inline-flex',
-
-        alignItems:
-            'center',
-
-        gap:
-            5,
-
-        padding:
-            '5px 9px',
-
-        borderRadius:
-            999,
-
-        background:
-            'rgba(34,197,94,.10)',
-
-        color:
-            '#86efac',
-
-        border:
-            '1px solid rgba(34,197,94,.18)',
-
-        fontSize:
-            11,
-
-        fontWeight:
-            700,
-    },
-
-    issueBadge: {
-        display:
-            'inline-flex',
-
-        alignItems:
-            'center',
-
-        gap:
-            5,
-
-        padding:
-            '5px 9px',
-
-        borderRadius:
-            999,
-
-        background:
-            'rgba(249,115,22,.10)',
-
-        color:
-            '#fdba74',
-
-        border:
-            '1px solid rgba(249,115,22,.18)',
-
-        fontSize:
-            11,
-
-        fontWeight:
-            700,
-    },
-
-    postedBadge: {
-        display:
-            'inline-flex',
-
-        padding:
-            '5px 9px',
-
-        borderRadius:
-            999,
-
-        background:
-            'rgba(59,130,246,.10)',
-
-        color:
-            '#93c5fd',
-
-        border:
-            '1px solid rgba(59,130,246,.18)',
-
-        fontSize:
-            11,
-
-        fontWeight:
-            700,
-    },
-
-    cancelledBadge: {
-        display:
-            'inline-flex',
-
-        padding:
-            '5px 9px',
-
-        borderRadius:
-            999,
-
-        background:
-            'rgba(239,68,68,.10)',
-
-        color:
-            '#fca5a5',
-
-        border:
-            '1px solid rgba(239,68,68,.18)',
-
-        fontSize:
-            11,
-
-        fontWeight:
-            700,
-    },
-
-    draftBadge: {
-        display:
-            'inline-flex',
-
-        padding:
-            '5px 9px',
-
-        borderRadius:
-            999,
-
-        background:
-            'rgba(245,158,11,.10)',
-
-        color:
-            '#fbbf24',
-
-        border:
-            '1px solid rgba(245,158,11,.18)',
-
-        fontSize:
-            11,
-
-        fontWeight:
-            700,
-    },
-
-    iconButton: {
-        width:
-            36,
-
-        height:
-            36,
-
-        display:
-            'grid',
-
-        placeItems:
-            'center',
-
-        border:
-            '1px solid #293542',
-
-        borderRadius:
-            9,
-
-        background:
-            '#141d27',
-
-        color:
-            '#b9c5d2',
-
-        cursor:
-            'pointer',
-    },
-
-    tableFooter: {
-        padding:
-            '12px 16px',
-
-        borderTop:
-            '1px solid rgba(255,255,255,.05)',
-
-        color:
-            '#718096',
-
-        fontSize:
-            11,
-    },
-
-    overlay: {
-        position:
-            'fixed',
-
-        inset:
-            0,
-
-        zIndex:
-            1000,
-
-        display:
-            'grid',
-
-        placeItems:
-            'center',
-
-        padding:
-            20,
-
-        background:
-            'rgba(0,0,0,.75)',
-
-        backdropFilter:
-            'blur(7px)',
-    },
-
-    modal: {
-        width:
-            'min(900px, 96vw)',
-
-        maxHeight:
-            '92vh',
-
-        overflowY:
-            'auto',
-
-        border:
-            '1px solid #273446',
-
-        borderRadius:
-            20,
-
-        background:
-            '#111a2a',
-
-        boxShadow:
-            '0 30px 100px rgba(0,0,0,.55)',
-    },
-
-    modalHeader: {
-        display:
-            'flex',
-
-        justifyContent:
-            'space-between',
-
-        alignItems:
-            'center',
-
-        gap:
-            16,
-
-        padding:
-            22,
-
-        borderBottom:
-            '1px solid rgba(255,255,255,.06)',
-    },
-
-    closeButton: {
-        width:
-            40,
-
-        height:
-            40,
-
-        display:
-            'grid',
-
-        placeItems:
-            'center',
-
-        border:
-            0,
-
-        borderRadius:
-            10,
-
-        background:
-            'rgba(255,255,255,.06)',
-
-        color:
-            '#fff',
-
-        cursor:
-            'pointer',
-    },
-
-    documentInfoGrid: {
-        display:
-            'grid',
-
-        gridTemplateColumns:
-            'repeat(3, minmax(0, 1fr))',
-
-        gap:
-            10,
-
-        padding:
-            18,
-    },
-
-    infoCard: {
-        display:
-            'grid',
-
-        gap:
-            5,
-
-        padding:
-            12,
-
-        border:
-            '1px solid #293542',
-
-        borderRadius:
-            10,
-
-        background:
-            '#141d27',
-    },
-
-    infoLabel: {
-        color:
-            '#718096',
-
-        fontSize:
-            10,
-    },
-
-    commentBox: {
-        display:
-            'grid',
-
-        gap:
-            6,
-
-        margin:
-            '0 18px 18px',
-
-        padding:
-            12,
-
-        border:
-            '1px solid #293542',
-
-        borderRadius:
-            10,
-
-        background:
-            '#101820',
-    },
-
-    itemsHeader: {
-        display:
-            'flex',
-
-        justifyContent:
-            'space-between',
-
-        alignItems:
-            'center',
-
-        gap:
-            16,
-
-        padding:
-            '18px 18px 12px',
-    },
-
-    itemsCounter: {
-        padding:
-            '5px 9px',
-
-        borderRadius:
-            999,
-
-        background:
-            'rgba(59,130,246,.10)',
-
-        color:
-            '#93c5fd',
-
-        fontSize:
-            11,
-
-        fontWeight:
-            700,
-    },
-
-    materialCell: {
-        display:
-            'flex',
-
-        alignItems:
-            'center',
-
-        gap:
-            10,
-    },
-
-    colorSwatch: {
-        width:
-            27,
-
-        height:
-            27,
-
-        borderRadius:
-            6,
-
-        flex:
-            '0 0 auto',
-
-        border:
-            '1px solid rgba(255,255,255,.22)',
-    },
-
-    modalFooter: {
-        display:
-            'flex',
-
-        alignItems:
-            'center',
-
-        gap:
-            10,
-
-        padding:
-            18,
-
-        borderTop:
-            '1px solid rgba(255,255,255,.06)',
-    },
-
-    cancelButton: {
-        minHeight:
-            40,
-
-        display:
-            'inline-flex',
-
-        alignItems:
-            'center',
-
-        justifyContent:
-            'center',
-
-        gap:
-            7,
-
-        padding:
-            '0 14px',
-
-        border:
-            '1px solid rgba(239,68,68,.28)',
-
-        borderRadius:
-            9,
-
-        background:
-            'rgba(239,68,68,.10)',
-
-        color:
-            '#fca5a5',
-
-        cursor:
-            'pointer',
-
-        fontWeight:
-            700,
-    },
-
-    cancelledNotice: {
-        display:
-            'flex',
-
-        alignItems:
-            'center',
-
-        gap:
-            7,
-
-        color:
-            '#fca5a5',
-
-        fontSize:
-            12,
-
-        fontWeight:
-            700,
-    },
-
-    errorBox: {
-        padding:
-            '12px 14px',
-
-        marginBottom:
-            16,
-
-        border:
-            '1px solid rgba(239,68,68,.25)',
-
-        borderRadius:
-            10,
-
-        background:
-            'rgba(127,29,29,.18)',
-
-        color:
-            '#fca5a5',
-    },
-
-    successBox: {
-        padding:
-            '12px 14px',
-
-        marginBottom:
-            16,
-
-        border:
-            '1px solid rgba(34,197,94,.25)',
-
-        borderRadius:
-            10,
-
-        background:
-            'rgba(20,83,45,.18)',
-
-        color:
-            '#86efac',
-    },
+    searchInput: { width: '100%', border: 0, outline: 0, background: 'transparent', color: '#f2f4f8', font: 'inherit' },
+    control: { minHeight: 42, border: '1px solid #273040', borderRadius: 10, background: '#111722', color: '#dce2eb', padding: '0 10px' },
+    error: { marginTop: 15, border: '1px solid rgba(244,91,105,.35)', background: 'rgba(244,91,105,.08)', color: '#ff9ca5', borderRadius: 12, padding: '12px 14px' },
+    clickableRow: { cursor: 'pointer' },
+    empty: { padding: 28, textAlign: 'center', color: '#768295' },
+    statusPosted: { color: '#54d99c', fontWeight: 700, fontSize: 13 },
+    statusCancelled: { color: '#ff8b94', fontWeight: 700, fontSize: 13 },
+    statusDraft: { color: '#ffb454', fontWeight: 700, fontSize: 13 },
+    overlay: { position: 'fixed', inset: 0, background: 'rgba(3,7,12,.78)', backdropFilter: 'blur(6px)', zIndex: 80, display: 'grid', placeItems: 'center', padding: 24 },
+    modal: { width: 'min(980px, 96vw)', maxHeight: '90vh', overflow: 'auto', background: '#111722', border: '1px solid #293345', borderRadius: 18, boxShadow: '0 24px 80px rgba(0,0,0,.45)', padding: 22 },
+    modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
+    iconButton: { border: 0, background: 'transparent', color: '#98a3b5', cursor: 'pointer', padding: 6 },
+    metaGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 14, marginBottom: 22 },
+    metaLabel: { color: '#758195', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 4 },
+    metaValue: { color: '#e7ebf2', fontSize: 14 },
+    subtle: { color: '#768295', fontSize: 12, marginTop: 3 },
+    positive: { color: '#54d99c', fontWeight: 700 },
+    negative: { color: '#ff7f8b', fontWeight: 700 },
+    modalActions: { display: 'flex', justifyContent: 'flex-end', paddingTop: 18 },
 };

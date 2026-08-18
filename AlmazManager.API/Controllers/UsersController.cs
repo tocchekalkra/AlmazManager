@@ -2,8 +2,11 @@
 using AlmazManager.Application.Features.Users.Handlers;
 using AlmazManager.Application.Interfaces;
 using AlmazManager.Application.Security;
+using AlmazManager.Application.Features.Preferences.Handlers;
 using AlmazManager.Contracts.Requests.Users;
 using AlmazManager.Contracts.Responses;
+using AlmazManager.Domain.Enums;
+using AlmazManager.Domain.Interfaces;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -30,12 +33,28 @@ public sealed class UsersController : ControllerBase
     private readonly ICategoryAccessService
         _categoryAccessService;
 
+    private readonly UpdateUserSystemPermissionsHandler
+        _updateSystemPermissionsHandler;
+
+    private readonly ICurrentUserService
+        _currentUserService;
+
+    private readonly IUserRepository
+        _userRepository;
+
+    private readonly UserPreferencesHandler
+        _preferencesHandler;
+
     public UsersController(
         RegisterUserHandler registerHandler,
         GetUsersHandler getUsersHandler,
         GetUserCategoryAccessesHandler getCategoryAccessesHandler,
         UpdateUserCategoryAccessesHandler updateCategoryAccessesHandler,
-        ICategoryAccessService categoryAccessService)
+        ICategoryAccessService categoryAccessService,
+        UpdateUserSystemPermissionsHandler updateSystemPermissionsHandler,
+        ICurrentUserService currentUserService,
+        IUserRepository userRepository,
+        UserPreferencesHandler preferencesHandler)
     {
         _registerHandler =
             registerHandler;
@@ -51,6 +70,11 @@ public sealed class UsersController : ControllerBase
 
         _categoryAccessService =
             categoryAccessService;
+
+        _updateSystemPermissionsHandler = updateSystemPermissionsHandler;
+        _currentUserService = currentUserService;
+        _userRepository = userRepository;
+        _preferencesHandler = preferencesHandler;
     }
 
     /*
@@ -93,10 +117,22 @@ public sealed class UsersController : ControllerBase
             oracalCategories is null ||
             oracalCategories.Count > 0;
 
+        var user = await _userRepository.GetByIdAsync(_currentUserService.UserId)
+            ?? throw new InvalidOperationException("Текущий пользователь не найден.");
+        var administrator = user.Role == UserRole.Administrator;
+        var preferences = await _preferencesHandler.GetAsync();
+
         return Ok(
             new CurrentUserAccessResponse(
                 canInventoryStandard,
-                canInventoryOracal));
+                canInventoryOracal,
+                administrator || user.CanManageMaterials,
+                administrator || user.CanArchiveMaterials,
+                administrator || user.CanRestoreMaterials,
+                administrator || user.CanPermanentlyDeleteMaterials,
+                administrator || user.CanCancelDocuments,
+                administrator || user.CanManageSupplies,
+                preferences.Theme));
     }
 
     [HttpPost("register")]
@@ -163,6 +199,16 @@ public sealed class UsersController : ControllerBase
                 userId,
                 request);
 
+        return NoContent();
+    }
+
+    [HttpPut("{userId:guid}/system-access")]
+    [Authorize(Roles = "Administrator")]
+    public async Task<IActionResult> UpdateSystemAccess(
+        Guid userId,
+        [FromBody] UpdateUserSystemPermissionsRequest request)
+    {
+        await _updateSystemPermissionsHandler.HandleAsync(userId, request);
         return NoContent();
     }
 }

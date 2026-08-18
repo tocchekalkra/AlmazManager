@@ -20,14 +20,19 @@ using AlmazManager.Application.Features.InventoryDocuments.Handlers;
 using AlmazManager.Application.Features.Issue.Handlers;
 using AlmazManager.Application.Features.Materials.Handlers;
 using AlmazManager.Application.Features.Operations.Handlers;
+using AlmazManager.Application.Features.Notifications.Handlers;
+using AlmazManager.Application.Features.Preferences.Handlers;
 using AlmazManager.Application.Features.Receiving.Handlers;
 using AlmazManager.Application.Features.Stocks.Handlers;
+using AlmazManager.Application.Features.Supplies.Handlers;
 using AlmazManager.Application.Features.Users.Handlers;
 
 using AlmazManager.Application.Interfaces;
 using AlmazManager.Application.Options;
 using AlmazManager.Application.Services;
 
+using AlmazManager.Domain.Entities;
+using AlmazManager.Domain.Enums;
 using AlmazManager.Domain.Interfaces;
 
 using AlmazManager.Infrastructure.Database;
@@ -89,6 +94,17 @@ builder.Services.AddDbContext<WarehouseDbContext>(
 // CORS
 // ============================================================
 
+var allowedOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins")
+    .Get<string[]>()?
+    .Where(origin => !string.IsNullOrWhiteSpace(origin))
+    .ToArray()
+    ??
+    [
+        "http://localhost:5173",
+        "https://localhost:5173"
+    ];
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(
@@ -96,9 +112,7 @@ builder.Services.AddCors(options =>
         policy =>
         {
             policy
-                .WithOrigins(
-                    "http://localhost:5173",
-                    "https://localhost:5173")
+                .WithOrigins(allowedOrigins)
                 .AllowAnyHeader()
                 .AllowAnyMethod();
         });
@@ -193,6 +207,11 @@ builder.Services.AddScoped<
     IInventoryDocumentRepository,
     InventoryDocumentRepository>();
 
+builder.Services.AddScoped<IAuditEventRepository, AuditEventRepository>();
+builder.Services.AddScoped<IUserPreferenceRepository, UserPreferenceRepository>();
+builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
+builder.Services.AddScoped<ISupplyInvoiceRepository, SupplyInvoiceRepository>();
+
 
 // ============================================================
 // SERVICES
@@ -214,6 +233,9 @@ builder.Services.AddScoped<
     ICategoryAccessService,
     CategoryAccessService>();
 
+builder.Services.AddScoped<ISystemAccessService, SystemAccessService>();
+builder.Services.AddScoped<IStockNotificationService, StockNotificationService>();
+
 
 // ============================================================
 // AUTHENTICATION HANDLERS
@@ -234,6 +256,9 @@ builder.Services.AddScoped<
 
 builder.Services.AddScoped<
     UpdateUserCategoryAccessesHandler>();
+
+builder.Services.AddScoped<UpdateUserSystemPermissionsHandler>();
+builder.Services.AddScoped<UserPreferencesHandler>();
 
 
 // ============================================================
@@ -257,6 +282,7 @@ builder.Services.AddScoped<GetMaterialCatalogHandler>();
 builder.Services.AddScoped<GetMaterialByIdHandler>();
 builder.Services.AddScoped<UpdateMaterialHandler>();
 builder.Services.AddScoped<SetMaterialActivityHandler>();
+builder.Services.AddScoped<MaterialArchiveHandler>();
 
 
 // ============================================================
@@ -343,6 +369,8 @@ builder.Services.AddScoped<
 // ============================================================
 
 builder.Services.AddScoped<GetDashboardHandler>();
+builder.Services.AddScoped<NotificationHandler>();
+builder.Services.AddScoped<SupplyInvoiceHandler>();
 
 
 // ============================================================
@@ -423,6 +451,62 @@ var app = builder.Build();
 
 
 // ============================================================
+// DATABASE STARTUP / FIRST ADMIN
+// ============================================================
+
+if (builder.Configuration.GetValue<bool>(
+        "Database:ApplyMigrationsOnStartup"))
+{
+    await using var migrationScope =
+        app.Services.CreateAsyncScope();
+
+    var db = migrationScope.ServiceProvider
+        .GetRequiredService<WarehouseDbContext>();
+
+    await db.Database.MigrateAsync();
+}
+
+var bootstrapAdminPassword =
+    builder.Configuration["BootstrapAdmin:Password"];
+
+if (!string.IsNullOrWhiteSpace(bootstrapAdminPassword))
+{
+    await using var bootstrapScope =
+        app.Services.CreateAsyncScope();
+
+    var userRepository = bootstrapScope.ServiceProvider
+        .GetRequiredService<IUserRepository>();
+
+    var users = await userRepository.GetAllAsync();
+
+    if (users.Count == 0)
+    {
+        var bootstrapAdmin = new AppUser(
+            builder.Configuration["BootstrapAdmin:FullName"]
+                ?? "Администратор",
+            builder.Configuration["BootstrapAdmin:Login"]
+                ?? "admin",
+            UserRole.Administrator);
+
+        var passwordService = bootstrapScope.ServiceProvider
+            .GetRequiredService<IPasswordService>();
+
+        bootstrapAdmin.ChangePasswordHash(
+            passwordService.HashPassword(
+                bootstrapAdmin,
+                bootstrapAdminPassword));
+
+        await userRepository.AddAsync(bootstrapAdmin);
+        await userRepository.SaveChangesAsync();
+
+        app.Logger.LogInformation(
+            "Создан первый администратор AlmazManager: {Login}",
+            bootstrapAdmin.Login);
+    }
+}
+
+
+// ============================================================
 // AUTO START REACT / VITE
 // ============================================================
 
@@ -445,17 +529,21 @@ app.UseMiddleware<
 // SWAGGER
 // ============================================================
 
-app.UseSwagger();
-
-app.UseSwaggerUI(options =>
+if (app.Environment.IsDevelopment() ||
+    builder.Configuration.GetValue<bool>("Swagger:Enabled"))
 {
-    options.SwaggerEndpoint(
-        "/swagger/v1/swagger.json",
-        "AlmazManager API v1");
+    app.UseSwagger();
 
-    options.DocumentTitle =
-        "AlmazManager API";
-});
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint(
+            "/swagger/v1/swagger.json",
+            "AlmazManager API v1");
+
+        options.DocumentTitle =
+            "AlmazManager API";
+    });
+}
 
 
 // ============================================================
@@ -463,6 +551,8 @@ app.UseSwaggerUI(options =>
 // ============================================================
 
 app.UseCors("AlmazManagerWeb");
+
+app.UseStaticFiles();
 
 
 // ============================================================
@@ -479,6 +569,16 @@ app.UseAuthorization();
 // ============================================================
 
 app.MapControllers();
+
+app.MapGet(
+        "/health",
+        () => Results.Ok(new
+        {
+            status = "ok",
+            service = "AlmazManager.API",
+            utc = DateTime.UtcNow
+        }))
+    .AllowAnonymous();
 
 
 // ============================================================

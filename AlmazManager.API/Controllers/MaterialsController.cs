@@ -31,13 +31,17 @@ public sealed class MaterialsController : ControllerBase
     private readonly SetMaterialActivityHandler
         _activityHandler;
 
+    private readonly MaterialArchiveHandler
+        _archiveHandler;
+
     public MaterialsController(
         CreateMaterialHandler createMaterialHandler,
         GetMaterialsHandler getMaterialsHandler,
         GetMaterialCatalogHandler getCatalogHandler,
         GetMaterialByIdHandler getByIdHandler,
         UpdateMaterialHandler updateMaterialHandler,
-        SetMaterialActivityHandler activityHandler)
+        SetMaterialActivityHandler activityHandler,
+        MaterialArchiveHandler archiveHandler)
     {
         _createMaterialHandler =
             createMaterialHandler;
@@ -56,6 +60,8 @@ public sealed class MaterialsController : ControllerBase
 
         _activityHandler =
             activityHandler;
+
+        _archiveHandler = archiveHandler;
     }
 
     [HttpPost]
@@ -218,5 +224,21 @@ public sealed class MaterialsController : ControllerBase
                 .HandleAsync(command);
 
         return Ok(response);
+    }
+
+    [HttpGet("{id:guid}/archive-impact")]
+    public async Task<ActionResult<AlmazManager.Contracts.Responses.Materials.MaterialArchiveImpactResponse>>
+        GetArchiveImpact(Guid id)
+    {
+        return Ok(await _archiveHandler.GetImpactAsync(id));
+    }
+
+    [HttpDelete("{id:guid}/permanent")]
+    public async Task<IActionResult> DeletePermanently(
+        Guid id,
+        [FromBody] PermanentlyDeleteMaterialRequest request)
+    {
+        await _archiveHandler.DeletePermanentlyAsync(id, request.ConfirmationName);
+        return NoContent();
     }
 }

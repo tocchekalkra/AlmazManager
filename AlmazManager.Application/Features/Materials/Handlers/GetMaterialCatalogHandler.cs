@@ -17,10 +17,22 @@ public sealed class GetMaterialCatalogHandler
     private readonly ICategoryAccessService
         _categoryAccessService;
 
+    private readonly IUserPreferenceRepository
+        _preferenceRepository;
+
+    private readonly ICurrentUserService
+        _currentUserService;
+
+    private readonly ISupplyInvoiceRepository
+        _supplyInvoiceRepository;
+
     public GetMaterialCatalogHandler(
         IMaterialRepository materialRepository,
         IStockRepository stockRepository,
-        ICategoryAccessService categoryAccessService)
+        ICategoryAccessService categoryAccessService,
+        IUserPreferenceRepository preferenceRepository,
+        ICurrentUserService currentUserService,
+        ISupplyInvoiceRepository supplyInvoiceRepository)
     {
         _materialRepository =
             materialRepository;
@@ -30,6 +42,10 @@ public sealed class GetMaterialCatalogHandler
 
         _categoryAccessService =
             categoryAccessService;
+
+        _preferenceRepository = preferenceRepository;
+        _currentUserService = currentUserService;
+        _supplyInvoiceRepository = supplyInvoiceRepository;
     }
 
     public async Task<MaterialCatalogResponse>
@@ -45,7 +61,7 @@ public sealed class GetMaterialCatalogHandler
             request.PageSize switch
             {
                 < 1 => 20,
-                > 100 => 100,
+                > 2000 => 2000,
                 _ => request.PageSize
             };
 
@@ -56,6 +72,14 @@ public sealed class GetMaterialCatalogHandler
         var stocks =
             await _stockRepository
                 .GetAllAsync();
+
+        var openSupplies = await _supplyInvoiceRepository.GetOpenAsync();
+        var expectedByMaterialId = openSupplies
+            .SelectMany(invoice => invoice.Items)
+            .GroupBy(item => item.MaterialId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Sum(item => item.RemainingQuantity));
 
         var allowedCategoryIds =
             await _categoryAccessService
@@ -95,6 +119,7 @@ public sealed class GetMaterialCatalogHandler
                         material.Unit.ToString(),
                         material.MinimumQuantity,
                         currentQuantity,
+                        expectedByMaterialId.GetValueOrDefault(material.Id),
                         currentQuantity <
                         material.MinimumQuantity,
                         material.IsActive,
@@ -166,11 +191,22 @@ public sealed class GetMaterialCatalogHandler
                             item.CurrentQuantity <= 0);
         }
 
-        query =
-            ApplySorting(
-                query,
-                request.SortBy,
-                request.SortDirection);
+        if (string.IsNullOrWhiteSpace(request.SortBy) &&
+            string.IsNullOrWhiteSpace(request.Search))
+        {
+            var preference = await _preferenceRepository.GetByUserIdAsync(_currentUserService.UserId);
+            var order = (preference?.MaterialOrder ?? [])
+                .Select((id, index) => new { id, index })
+                .ToDictionary(x => x.id, x => x.index);
+
+            query = query
+                .OrderBy(item => order.GetValueOrDefault(item.Id, int.MaxValue))
+                .ThenBy(item => item.Name);
+        }
+        else
+        {
+            query = ApplySorting(query, request.SortBy, request.SortDirection);
+        }
 
         var totalCount =
             query.Count();

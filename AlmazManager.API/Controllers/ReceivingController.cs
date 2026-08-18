@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using AlmazManager.Application.Features.Receiving.Commands;
 using AlmazManager.Application.Features.Receiving.Handlers;
 using AlmazManager.Contracts.Requests.Receiving;
@@ -8,6 +9,7 @@ namespace AlmazManager.API.Controllers;
 
 [ApiController]
 [Route("api/receiving")]
+[Authorize]
 public sealed class ReceivingController : ControllerBase
 {
     private readonly ReceiveMaterialHandler _handler;

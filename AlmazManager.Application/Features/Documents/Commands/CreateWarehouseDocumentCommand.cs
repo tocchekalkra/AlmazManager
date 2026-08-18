@@ -2,8 +2,11 @@
 
 public sealed record CreateWarehouseDocumentCommand(
     string Type,
+    DateOnly DocumentDate,
+    Guid? SupplyInvoiceId,
     string? Supplier,
     string? ExternalNumber,
+    string? Recipient,
     string? Comment,
     List<CreateWarehouseDocumentItemCommand> Items);
 

@@ -8,6 +8,7 @@ public sealed record MaterialCatalogItemResponse(
     string Unit,
     decimal MinimumQuantity,
     decimal CurrentQuantity,
+    decimal ExpectedQuantity,
     bool BelowMinimum,
     bool IsActive,
     string Kind,

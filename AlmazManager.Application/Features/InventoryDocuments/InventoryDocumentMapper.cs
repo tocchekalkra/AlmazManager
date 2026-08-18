@@ -1,4 +1,5 @@
-﻿using AlmazManager.Contracts.Responses.InventoryDocuments;
+﻿using AlmazManager.Application.Services;
+using AlmazManager.Contracts.Responses.InventoryDocuments;
 using AlmazManager.Domain.Entities;
 using AlmazManager.Domain.Interfaces;
 
@@ -8,13 +9,20 @@ internal static class InventoryDocumentMapper
 {
     public static async Task<InventoryDocumentResponse> MapAsync(
         InventoryDocument document,
-        IMaterialRepository materialRepository)
+        IMaterialRepository materialRepository,
+        ISet<Guid>? visibleMaterialIds = null)
     {
         var items =
             new List<InventoryDocumentItemResponse>();
 
         foreach (var item in document.Items)
         {
+            if (visibleMaterialIds is not null &&
+                !visibleMaterialIds.Contains(item.MaterialId))
+            {
+                continue;
+            }
+
             var material =
                 await materialRepository.GetByIdAsync(
                     item.MaterialId);
@@ -23,8 +31,9 @@ internal static class InventoryDocumentMapper
                 new InventoryDocumentItemResponse(
                     item.Id,
                     item.MaterialId,
-                    material?.Name ??
-                    "Неизвестный материал",
+                    material is null
+                        ? "Неизвестный материал"
+                        : MaterialDisplayName.Format(material),
                     material?.Article,
                     material?.Unit.ToString() ?? "—",
                     item.ExpectedQuantity,

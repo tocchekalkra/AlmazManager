@@ -4,6 +4,8 @@ public sealed class OperationJournalRequest
 {
     public Guid? MaterialId { get; init; }
 
+    public Guid? CategoryId { get; init; }
+
     public Guid? DocumentId { get; init; }
 
     public Guid? UserId { get; init; }

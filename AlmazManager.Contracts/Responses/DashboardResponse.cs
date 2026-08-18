@@ -12,8 +12,13 @@ public sealed record DashboardResponse(
     int ReceivingOperations,
     int IssueOperations,
     int InventoryOperations,
+    int ReceivingToday,
+    int IssueToday,
+    int IssueYesterday,
     IReadOnlyList<DashboardAttentionMaterialResponse>? AttentionMaterials = null,
-    IReadOnlyList<DashboardRecentOperationResponse>? RecentOperations = null);
+    IReadOnlyList<DashboardRecentOperationResponse>? RecentOperations = null,
+    IReadOnlyList<DashboardRecentDocumentResponse>? RecentDocuments = null,
+    IReadOnlyList<DashboardConsumptionDayResponse>? ConsumptionDays = null);
 
 public sealed record DashboardAttentionMaterialResponse(
     Guid MaterialId,
@@ -35,3 +40,44 @@ public sealed record DashboardRecentOperationResponse(
     Guid UserId,
     string UserFullName,
     string UserLogin);
+
+public sealed record DashboardRecentDocumentResponse(
+    Guid DocumentId,
+    string Number,
+    string Type,
+    DateTime CreatedAtUtc,
+    DateTime? PostedAtUtc,
+    Guid UserId,
+    string UserFullName,
+    string? Recipient,
+    int ItemCount,
+    string Summary);
+
+public sealed record DashboardConsumptionDayResponse(
+    DateOnly Date,
+    int DocumentCount,
+    int ItemCount,
+    string? TopMaterial);
+
+public sealed record ConsumptionStatisticsResponse(
+    DateOnly From,
+    DateOnly To,
+    IReadOnlyList<ConsumptionStatisticsDayResponse> Days);
+
+public sealed record ConsumptionStatisticsDayResponse(
+    DateOnly Date,
+    int DocumentCount,
+    int ItemCount,
+    IReadOnlyList<ConsumptionStatisticsItemResponse> Items);
+
+public sealed record ConsumptionStatisticsItemResponse(
+    Guid DocumentId,
+    string DocumentNumber,
+    DateTime? PostedAtUtc,
+    Guid MaterialId,
+    string MaterialName,
+    decimal Quantity,
+    string Unit,
+    string? Recipient,
+    Guid UserId,
+    string UserFullName);

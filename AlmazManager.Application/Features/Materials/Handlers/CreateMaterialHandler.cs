@@ -1,4 +1,6 @@
 ﻿using AlmazManager.Application.Features.Materials.Commands;
+using AlmazManager.Application.Interfaces;
+using AlmazManager.Application.Security;
 using AlmazManager.Contracts.Responses;
 using AlmazManager.Domain.Entities;
 using AlmazManager.Domain.Enums;
@@ -14,20 +16,33 @@ public sealed class CreateMaterialHandler
     private readonly ICategoryRepository
         _categoryRepository;
 
+    private readonly ISystemAccessService
+        _systemAccessService;
+
+    private readonly ICategoryAccessService
+        _categoryAccessService;
+
     public CreateMaterialHandler(
         IMaterialRepository materialRepository,
-        ICategoryRepository categoryRepository)
+        ICategoryRepository categoryRepository,
+        ISystemAccessService systemAccessService,
+        ICategoryAccessService categoryAccessService)
     {
         _materialRepository =
             materialRepository;
 
         _categoryRepository =
             categoryRepository;
+
+        _systemAccessService = systemAccessService;
+        _categoryAccessService = categoryAccessService;
     }
 
     public async Task<MaterialResponse> HandleAsync(
         CreateMaterialCommand command)
     {
+        await _systemAccessService.EnsureAccessAsync(SystemPermission.ManageMaterials);
+
         if (!Enum.TryParse<MeasurementUnit>(
                 command.Unit,
                 true,
@@ -74,6 +89,10 @@ public sealed class CreateMaterialHandler
             throw new InvalidOperationException(
                 $"Категория '{category.Name}' находится в архиве.");
         }
+
+        await _categoryAccessService.EnsureAccessAsync(
+            category.Id,
+            CategoryPermission.View);
 
         if (await _materialRepository
                 .ArticleExistsAsync(
@@ -127,6 +146,8 @@ public sealed class CreateMaterialHandler
         HandleBulkStandardAsync(
             CreateBulkStandardMaterialsCommand command)
     {
+        await _systemAccessService.EnsureAccessAsync(SystemPermission.ManageMaterials);
+
         var name =
             command.Name.Trim();
 
@@ -202,6 +223,10 @@ public sealed class CreateMaterialHandler
             throw new InvalidOperationException(
                 $"Категория '{category.Name}' находится в архиве.");
         }
+
+        await _categoryAccessService.EnsureAccessAsync(
+            category.Id,
+            CategoryPermission.View);
 
         var items =
             normalizedWidths

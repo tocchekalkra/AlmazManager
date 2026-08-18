@@ -6,6 +6,8 @@ public interface IUserCategoryAccessRepository
 {
     Task<List<UserCategoryAccess>> GetByUserIdAsync(Guid userId);
 
+    Task<List<UserCategoryAccess>> GetByCategoryIdAsync(Guid categoryId);
+
     Task<UserCategoryAccess?> GetByUserAndCategoryAsync(
         Guid userId,
         Guid categoryId);

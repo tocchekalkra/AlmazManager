@@ -1,4 +1,6 @@
 ﻿using AlmazManager.Application.Features.Issue.Commands;
+using AlmazManager.Application.Interfaces;
+using AlmazManager.Application.Security;
 using AlmazManager.Contracts.Responses;
 using AlmazManager.Domain.Entities;
 using AlmazManager.Domain.Enums;
@@ -11,15 +13,21 @@ public sealed class IssueMaterialHandler
     private readonly IMaterialRepository _materialRepository;
     private readonly IStockRepository _stockRepository;
     private readonly IOperationRepository _operationRepository;
+    private readonly ICategoryAccessService _categoryAccessService;
+    private readonly ICurrentUserService _currentUserService;
 
     public IssueMaterialHandler(
         IMaterialRepository materialRepository,
         IStockRepository stockRepository,
-        IOperationRepository operationRepository)
+        IOperationRepository operationRepository,
+        ICategoryAccessService categoryAccessService,
+        ICurrentUserService currentUserService)
     {
         _materialRepository = materialRepository;
         _stockRepository = stockRepository;
         _operationRepository = operationRepository;
+        _categoryAccessService = categoryAccessService;
+        _currentUserService = currentUserService;
     }
 
     public async Task<IssueMaterialResponse> HandleAsync(
@@ -34,6 +42,23 @@ public sealed class IssueMaterialHandler
                 "Материал не найден.");
         }
 
+        if (!material.IsActive)
+        {
+            throw new InvalidOperationException(
+                "Архивный материал нельзя списывать со склада.");
+        }
+
+        if (material.Kind == MaterialKind.Standard &&
+            command.Quantity != decimal.Truncate(command.Quantity))
+        {
+            throw new ArgumentException(
+                "Для стандартного материала количество должно быть целым.");
+        }
+
+        await _categoryAccessService.EnsureAccessAsync(
+            material.CategoryId,
+            CategoryPermission.Issue);
+
         var stock =
             await _stockRepository.GetByMaterialIdAsync(
                 command.MaterialId);
@@ -43,6 +68,8 @@ public sealed class IssueMaterialHandler
             throw new InvalidOperationException(
                 "Остаток материала не найден.");
         }
+
+        var quantityBefore = stock.Quantity;
 
         stock.Decrease(command.Quantity);
 
@@ -63,8 +90,13 @@ public sealed class IssueMaterialHandler
         var operation = new Operation(
             command.MaterialId,
             OperationType.Issue,
-            command.Quantity,
-            command.UserId,
+            quantityBefore,
+            -command.Quantity,
+            stock.Quantity,
+            _currentUserService.UserId,
+            null,
+            false,
+            null,
             details);
 
         await _operationRepository.AddAsync(operation);
