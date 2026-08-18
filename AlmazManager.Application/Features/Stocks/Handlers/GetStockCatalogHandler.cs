@@ -166,12 +166,16 @@ public sealed class GetStockCatalogHandler
             string.IsNullOrWhiteSpace(request.Search))
         {
             var preference = await _preferenceRepository.GetByUserIdAsync(_currentUserService.UserId);
-            var order = (preference?.MaterialOrder ?? [])
+            var materialOrder = (preference?.MaterialOrder ?? [])
+                .Select((id, index) => new { id, index })
+                .ToDictionary(x => x.id, x => x.index);
+            var categoryOrder = (preference?.CategoryOrder ?? [])
                 .Select((id, index) => new { id, index })
                 .ToDictionary(x => x.id, x => x.index);
 
             query = query
-                .OrderBy(item => order.GetValueOrDefault(item.MaterialId, int.MaxValue))
+                .OrderBy(item => categoryOrder.GetValueOrDefault(item.CategoryId, int.MaxValue))
+                .ThenBy(item => materialOrder.GetValueOrDefault(item.MaterialId, int.MaxValue))
                 .ThenBy(item => item.MaterialName);
         }
         else

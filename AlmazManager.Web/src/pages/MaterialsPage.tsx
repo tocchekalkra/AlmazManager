@@ -29,6 +29,7 @@ import { loadAllMaterialCatalogItems } from '../api/catalog';
 import { useAuth } from '../auth/AuthContext';
 import {
     filmCategoryParts,
+    filmMarkerText,
     findFilmCategoryId,
 } from '../utils/material';
 
@@ -37,6 +38,7 @@ type MaterialCatalogItem = {
     name: string;
     article: string;
     categoryId: string;
+    categoryName: string;
     unit: string;
     minimumQuantity: number;
     currentQuantity: number;
@@ -2868,7 +2870,7 @@ export default function MaterialsPage() {
                                     step={
                                         form.kind ===
                                             'Oracal641'
-                                            ? '0.1'
+                                            ? '0.01'
                                             : '1'
                                     }
                                     value={
@@ -3096,6 +3098,12 @@ function StandardMaterialGroupCard({
                                             )
                                             : 'Без ширины'}
                                     </strong>
+
+                                    {filmMarkerText(material.categoryName) && (
+                                        <span style={styles.filmMarker}>
+                                            {filmMarkerText(material.categoryName)}
+                                        </span>
+                                    )}
 
                                     <div
                                         style={
@@ -3418,6 +3426,25 @@ const styles: Record<
     widthValue: {
         fontSize:
             18,
+    },
+
+    filmMarker: {
+        display:
+            'inline-flex',
+        marginLeft:
+            7,
+        padding:
+            '2px 6px',
+        border:
+            '1px solid rgba(74,166,255,.35)',
+        borderRadius:
+            6,
+        color:
+            '#93c5fd',
+        fontSize:
+            10,
+        fontWeight:
+            900,
     },
 
     colorSwatch: {

@@ -176,7 +176,11 @@ fun DashboardScreen(api: ApiService) {
             dashboard.attentionMaterials.take(3).forEach { material ->
                 SurfaceRow {
                     Column(Modifier.weight(1f)) {
-                        Text(material.name, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            material.name + filmMarkerText(material.category)
+                                .let { if (it.isBlank()) "" else " · $it" },
+                            fontWeight = FontWeight.SemiBold,
+                        )
                         Text(
                             "${material.article} · ${material.category}",
                             style = MaterialTheme.typography.bodySmall,
@@ -258,15 +262,39 @@ fun StockScreen(api: ApiService) {
             item.categoryName.contains(query, true) || item.colorCode?.contains(query, true) == true) &&
             (!onlyLow || item.belowMinimum)
     }
-    val grouped = filtered.groupBy { item ->
-        if (item.kind == "Oracal641") "ORACAL 641" else item.categoryName
-    }
+    val grouped = filtered
+        .groupBy { it.categoryId }
+        .map { (categoryId, categoryItems) ->
+            Triple(
+                categoryId,
+                if (categoryItems.firstOrNull()?.kind == "Oracal641")
+                    "ORACAL 641"
+                else
+                    categoryItems.firstOrNull()?.categoryName ?: "Без категории",
+                categoryItems
+                    .groupBy { item ->
+                        if (item.kind == "Oracal641")
+                            listOfNotNull(item.colorCode, item.colorName).joinToString(" ")
+                        else
+                            item.materialName
+                                .replace(Regex("\\s+-?\\s*\\d+(?:[.,]\\d+)?\\s*м\\s*$", RegexOption.IGNORE_CASE), "")
+                                .trim()
+                    }
+                    .values
+                    .flatMap { widths -> widths.sortedByDescending { it.widthMeters ?: 0.0 } },
+            )
+        }
 
     fun moveMaterial(materialId: String, direction: Int) {
         if (!orderMode || savingOrder) return
         val next = allItems.toMutableList()
         val from = next.indexOfFirst { it.materialId == materialId }
-        val to = (from + direction).coerceIn(0, next.lastIndex)
+        if (from < 0) return
+        val categoryId = next[from].categoryId
+        val categoryIndices = next.indices.filter { next[it].categoryId == categoryId }
+        val position = categoryIndices.indexOf(from)
+        val targetPosition = (position + direction).coerceIn(0, categoryIndices.lastIndex)
+        val to = categoryIndices[targetPosition]
         if (from < 0 || from == to) return
         val moved = next.removeAt(from)
         next.add(to, moved)
@@ -279,6 +307,37 @@ fun StockScreen(api: ApiService) {
                 api.updatePreferences(
                     UpdatePreferencesRequest(materialOrder = next.map { it.materialId }),
                 )
+            } catch (requestError: Throwable) {
+                error = ApiClient.errorMessage(requestError)
+                refreshKey += 1
+            } finally {
+                savingOrder = false
+            }
+        }
+    }
+
+    fun moveCategory(categoryId: String, direction: Int) {
+        if (!orderMode || savingOrder) return
+        val categoryOrder = allItems.map { it.categoryId }.distinct().toMutableList()
+        val from = categoryOrder.indexOf(categoryId)
+        val to = (from + direction).coerceIn(0, categoryOrder.lastIndex)
+        if (from < 0 || from == to) return
+        val moved = categoryOrder.removeAt(from)
+        categoryOrder.add(to, moved)
+
+        val orderIndex = categoryOrder.withIndex().associate { it.value to it.index }
+        allItems = allItems.withIndex()
+            .sortedWith(
+                compareBy<IndexedValue<StockItem>> { orderIndex[it.value.categoryId] ?: Int.MAX_VALUE }
+                    .thenBy { it.index },
+            )
+            .map { it.value }
+
+        scope.launch {
+            try {
+                savingOrder = true
+                error = ""
+                api.updatePreferences(UpdatePreferencesRequest(categoryOrder = categoryOrder))
             } catch (requestError: Throwable) {
                 error = ApiClient.errorMessage(requestError)
                 refreshKey += 1
@@ -343,15 +402,30 @@ fun StockScreen(api: ApiService) {
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                grouped.forEach { (categoryName, categoryItems) ->
+                grouped.forEachIndexed { categoryIndex, (categoryId, categoryName, categoryItems) ->
                     item(key = "category-$categoryName") {
-                        Text(
-                            categoryName,
-                            modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                categoryName,
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            if (orderMode) {
+                                IconButton(
+                                    onClick = { moveCategory(categoryId, -1) },
+                                    enabled = categoryIndex > 0,
+                                ) { Text("↑", fontWeight = FontWeight.Bold) }
+                                IconButton(
+                                    onClick = { moveCategory(categoryId, 1) },
+                                    enabled = categoryIndex < grouped.lastIndex,
+                                ) { Text("↓", fontWeight = FontWeight.Bold) }
+                            }
+                        }
                     }
 
                     items(categoryItems, key = { it.materialId }) { item ->
@@ -448,6 +522,7 @@ private fun HierarchyMaterialPicker(
         .firstOrNull { it.key == selectedMaterialName }
         ?.value
         .orEmpty()
+        .sortedByDescending { it.widthMeters ?: 0.0 }
 
     SelectionDropdown(
         label = "Категория",
@@ -474,6 +549,7 @@ private fun HierarchyMaterialPicker(
         placeholder = if (selectedMaterialName.isBlank()) "Сначала выберите материал" else "Выберите ширину",
         options = widthMaterials.map { material ->
             material.id to "${material.widthMeters?.let { "${numberFormat.format(it)} м" } ?: "Без ширины"} · " +
+                filmMarkerText(material.categoryName).let { if (it.isBlank()) "" else "$it · " } +
                 "остаток ${numberFormat.format(material.currentQuantity)} ${unitLabel(material.unit)}"
         },
         enabled = selectedMaterialName.isNotBlank(),
@@ -690,15 +766,19 @@ fun MovementScreen(api: ApiService, type: String) {
                         error = "Количество должно быть больше нуля."
                         return@Button
                     }
-                    if (material.kind == "Standard" && amount % 1.0 != 0.0) {
+                    if (material.kind != "Oracal641" && amount % 1.0 != 0.0) {
                         error = "Стандартные материалы учитываются целыми штуками."
                         return@Button
                     }
-                    if (!receiving && amount > material.currentQuantity) {
+                    val normalizedAmount = roundToStep(
+                        amount,
+                        if (material.kind == "Oracal641") 0.01 else 1.0,
+                    )
+                    if (!receiving && normalizedAmount > material.currentQuantity) {
                         error = "Нельзя списать больше текущего остатка."
                         return@Button
                     }
-                    lines += MovementLine(material, amount)
+                    lines += MovementLine(material, normalizedAmount)
                     selected = null
                     selectedMaterialName = ""
                     quantity = "1"
@@ -1026,8 +1106,10 @@ fun SuppliesScreen(api: ApiService) {
                                 val value = parseNumber(quantity)
                                 if (material == null || value == null || value <= 0) {
                                     error = "Выберите материал и укажите количество."
+                                } else if (value % 1.0 != 0.0) {
+                                    error = "Количество обычного материала должно быть целым."
                                 } else {
-                                    lines += SupplyDraftLine(material, value)
+                                    lines += SupplyDraftLine(material, roundToStep(value, 1.0))
                                     selectedMaterialName = ""
                                     selectedMaterialId = ""
                                     quantity = "1"
@@ -1242,7 +1324,13 @@ fun InventoryScreen(api: ApiService, oracal: Boolean) {
 
                 materialGroups.forEach { (materialName, widths) ->
                     item(key = "inventory-group-${category.id}-$materialName") {
-                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            border = BorderStroke(
+                                1.dp,
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
+                            ),
+                        ) {
                             Column(Modifier.fillMaxWidth().padding(10.dp)) {
                                 Text(
                                     materialName,
@@ -1256,10 +1344,11 @@ fun InventoryScreen(api: ApiService, oracal: Boolean) {
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
 
-                                widths.forEach { material ->
+                                widths.sortedByDescending { it.widthMeters ?: 0.0 }.forEach { material ->
                                     val selected = selectedMaterialId == material.id
                                     val actual = parseNumber(counts[material.id].orEmpty())
                                     val displayActual = actual ?: material.currentQuantity
+                                    val quantityStep = if (oracal) 0.01 else 1.0
 
                                     Column(
                                         modifier = Modifier
@@ -1288,13 +1377,19 @@ fun InventoryScreen(api: ApiService, oracal: Boolean) {
                                                 Spacer(Modifier.width(6.dp))
                                             }
                                             Text(
-                                                material.widthMeters?.let { "${numberFormat.format(it)} м" } ?: "—",
-                                                modifier = Modifier.width(65.dp),
+                                                (material.widthMeters?.let { "${numberFormat.format(it)} м" } ?: "—") +
+                                                    filmMarkerText(category.name).let { if (it.isBlank()) "" else " · $it" },
+                                                modifier = Modifier.width(95.dp),
                                                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                                             )
                                             OutlinedButton(
                                                 onClick = {
-                                                    counts[material.id] = numberFormat.format((displayActual - 1.0).coerceAtLeast(0.0))
+                                                    counts[material.id] = numberFormat.format(
+                                                        roundToStep(
+                                                            (displayActual - quantityStep).coerceAtLeast(0.0),
+                                                            quantityStep,
+                                                        ),
+                                                    )
                                                 },
                                                 enabled = selected,
                                                 modifier = Modifier.size(42.dp),
@@ -1306,7 +1401,11 @@ fun InventoryScreen(api: ApiService, oracal: Boolean) {
                                                 fontWeight = FontWeight.Bold,
                                             )
                                             OutlinedButton(
-                                                onClick = { counts[material.id] = numberFormat.format(displayActual + 1.0) },
+                                                onClick = {
+                                                    counts[material.id] = numberFormat.format(
+                                                        roundToStep(displayActual + quantityStep, quantityStep),
+                                                    )
+                                                },
                                                 enabled = selected,
                                                 modifier = Modifier.size(42.dp),
                                             ) { Text("+", style = MaterialTheme.typography.titleLarge) }
@@ -1724,7 +1823,9 @@ private fun materialDisplayName(material: MaterialItem): String {
     } else {
         "$baseName · $color"
     }
-    return width?.let { "$name - $it" } ?: name
+    val label = width?.let { "$name - $it" } ?: name
+    val markers = filmMarkerText(material.categoryName)
+    return if (markers.isBlank()) label else "$label · $markers"
 }
 
 private fun stockDisplayName(material: StockItem): String {
@@ -1742,7 +1843,25 @@ private fun stockDisplayName(material: StockItem): String {
     } else {
         "$baseName · $color"
     }
-    return width?.let { "$name - $it" } ?: name
+    val label = width?.let { "$name - $it" } ?: name
+    val markers = filmMarkerText(material.categoryName)
+    return if (markers.isBlank()) label else "$label · $markers"
+}
+
+private fun filmMarkerText(categoryName: String?): String {
+    val normalized = categoryName.orEmpty().lowercase()
+    if (!normalized.contains("плён") && !normalized.contains("плен")) return ""
+
+    val codes = mutableListOf<String>()
+    when {
+        normalized.contains("прозрач") -> codes += "П"
+        normalized.contains("бел") -> codes += "Б"
+    }
+    when {
+        normalized.contains("глян") -> codes += "Г"
+        normalized.contains("мат") -> codes += "М"
+    }
+    return codes.joinToString(" · ")
 }
 
 private fun materialBaseName(material: MaterialItem): String {
@@ -1797,6 +1916,9 @@ private fun DateButton(
 
 private fun parseNumber(value: String): Double? =
     value.trim().replace(',', '.').toDoubleOrNull()
+
+private fun roundToStep(value: Double, step: Double): Double =
+    kotlin.math.round(value / step) * step
 
 private fun normalizeNumericInput(value: String): String =
     value.filter { it.isDigit() || it == '.' || it == ',' }

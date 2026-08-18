@@ -71,6 +71,7 @@ export default function StockPage() {
     const [onlyLow, setOnlyLow] = useState(searchParams.get('belowMinimum') === 'true');
     const [orderMode, setOrderMode] = useState(false);
     const [draggedId, setDraggedId] = useState<string | null>(null);
+    const [draggedCategoryId, setDraggedCategoryId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [savingOrder, setSavingOrder] = useState(false);
     const [error, setError] = useState('');
@@ -146,7 +147,17 @@ export default function StockPage() {
         [data],
     );
     const oracalItems = useMemo(
-        () => data?.items.filter((item) => item.kind === 'Oracal641') ?? [],
+        () => (data?.items.filter((item) => item.kind === 'Oracal641') ?? [])
+            .slice()
+            .sort((a, b) => {
+                const colorOrder = (a.colorCode ?? '').localeCompare(
+                    b.colorCode ?? '',
+                    'ru',
+                    { numeric: true },
+                );
+
+                return colorOrder || Number(b.widthMeters ?? 0) - Number(a.widthMeters ?? 0);
+            }),
         [data],
     );
 
@@ -187,6 +198,65 @@ export default function StockPage() {
         }
     }
 
+    async function reorderCategory(targetId: string) {
+        if (
+            !orderMode ||
+            !draggedCategoryId ||
+            draggedCategoryId === targetId ||
+            search ||
+            onlyLow ||
+            !data
+        ) return;
+
+        const categoryIds = standardCategories.map((category) => category.id);
+        const from = categoryIds.indexOf(draggedCategoryId);
+        const to = categoryIds.indexOf(targetId);
+        if (from < 0 || to < 0) return;
+
+        const [moved] = categoryIds.splice(from, 1);
+        categoryIds.splice(to, 0, moved);
+
+        const orderByCategory = new Map(
+            categoryIds.map((categoryId, index) => [categoryId, index]),
+        );
+        const standardItems = data.items
+            .map((item, index) => ({ item, index }))
+            .filter(({ item }) => item.kind !== 'Oracal641')
+            .sort((a, b) =>
+                (orderByCategory.get(a.item.categoryId) ?? Number.MAX_SAFE_INTEGER) -
+                (orderByCategory.get(b.item.categoryId) ?? Number.MAX_SAFE_INTEGER) ||
+                a.index - b.index,
+            )
+            .map(({ item }) => item);
+        const oracal = data.items.filter((item) => item.kind === 'Oracal641');
+
+        setData({ ...data, items: [...standardItems, ...oracal] });
+        setDraggedCategoryId(null);
+
+        const allCategoryIds = [...new Set(data.items.map((item) => item.categoryId))];
+        const standardCategorySet = new Set(categoryIds);
+        let standardIndex = 0;
+        const preferenceOrder = allCategoryIds.map((categoryId) =>
+            standardCategorySet.has(categoryId)
+                ? categoryIds[standardIndex++]
+                : categoryId,
+        );
+
+        try {
+            setSavingOrder(true);
+            setError('');
+            await api.put('/preferences', { categoryOrder: preferenceOrder });
+        } catch (requestError: any) {
+            setError(
+                requestError?.response?.data?.message ??
+                'Не удалось сохранить порядок категорий.',
+            );
+            await loadStock();
+        } finally {
+            setSavingOrder(false);
+        }
+    }
+
     function runPdfExport(kind: 'standard' | 'oracal') {
         try {
             if (exportItems.length === 0) return;
@@ -216,6 +286,7 @@ export default function StockPage() {
                         onClick={() => {
                             setOrderMode((value) => !value);
                             setDraggedId(null);
+                            setDraggedCategoryId(null);
                         }}
                     >
                         {orderMode ? <Check size={17} /> : <Unlock size={17} />}
@@ -253,6 +324,7 @@ export default function StockPage() {
                         onChange={(event) => {
                             setSearch(event.target.value);
                             setOrderMode(false);
+                            setDraggedCategoryId(null);
                         }}
                         placeholder="Материал, ширина или артикул..."
                         style={styles.searchInput}
@@ -266,6 +338,7 @@ export default function StockPage() {
                         onChange={(event) => {
                             setOnlyLow(event.target.checked);
                             setOrderMode(false);
+                            setDraggedCategoryId(null);
                         }}
                     />
                     Только ниже минимума
@@ -275,7 +348,7 @@ export default function StockPage() {
             {orderMode && (
                 <div style={styles.orderHint}>
                     <Unlock size={16} />
-                    Режим перемещения включён. Перетаскивайте только нужные строки; порядок сохраняется лично для вас.
+                    Режим перемещения включён. Перетаскивайте категории за заголовок, а материалы — за строки; порядок сохраняется лично для вас.
                 </div>
             )}
             {!orderMode && (
@@ -303,10 +376,25 @@ export default function StockPage() {
                 {loading && <div style={styles.empty}>Загрузка...</div>}
                 {!loading && standardCategories.map((category) => (
                     <section key={category.id} style={styles.categoryCard}>
-                        <div style={styles.categoryHeader}>
-                            <div>
+                        <div
+                            style={{
+                                ...styles.categoryHeader,
+                                ...(orderMode ? styles.draggableCategoryHeader : {}),
+                            }}
+                            draggable={orderMode}
+                            onDragStart={() => {
+                                setDraggedCategoryId(category.id);
+                                setDraggedId(null);
+                            }}
+                            onDragOver={(event) => orderMode && event.preventDefault()}
+                            onDrop={() => void reorderCategory(category.id)}
+                        >
+                            <div style={styles.categoryTitleWrap}>
+                                {orderMode ? <GripVertical size={19} /> : <Lock size={15} />}
+                                <div>
                                 <p className="eyebrow">КАТЕГОРИЯ</p>
                                 <h3>{category.name}</h3>
+                                </div>
                             </div>
                             <span>{category.materials.reduce((sum, group) => sum + group.items.length, 0)} поз.</span>
                         </div>
@@ -534,7 +622,15 @@ function buildCategoryGroups(items: StockItem[]) {
         categories.set(item.categoryId, category);
     }
 
-    return [...categories.values()];
+    return [...categories.values()].map((category) => ({
+        ...category,
+        materials: category.materials.map((material) => ({
+            ...material,
+            items: material.items
+                .slice()
+                .sort((a, b) => Number(b.widthMeters ?? 0) - Number(a.widthMeters ?? 0)),
+        })),
+    }));
 }
 
 function normalizeMaterialName(value: string) {
@@ -582,6 +678,8 @@ const styles: Record<string, CSSProperties> = {
     exportActions: { display: 'flex', gap: 8, flexWrap: 'wrap' },
     categoryCard: { border: '1px solid #26313e', borderRadius: 14, overflow: 'hidden', marginBottom: 14, background: '#0d141c' },
     categoryHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px 17px', borderBottom: '1px solid #26313e', background: 'rgba(74,166,255,.07)' },
+    draggableCategoryHeader: { cursor: 'grab', outline: '1px dashed rgba(74,166,255,.35)', outlineOffset: -5 },
+    categoryTitleWrap: { display: 'flex', alignItems: 'center', gap: 11 },
     materialGroup: { padding: '14px 15px 16px' },
     materialGroupTitle: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 9, color: '#aeb8c7' },
     colorCell: { display: 'flex', alignItems: 'center', gap: 10 },

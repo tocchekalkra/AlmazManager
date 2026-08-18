@@ -23,6 +23,7 @@ type MaterialItem = {
     id: string;
     name: string;
     article: string;
+    categoryName: string;
     unit: string;
     widthMeters?: number | null;
     kind?: string | null;
@@ -384,6 +385,7 @@ export default function DocumentsPage() {
                                                 <td>
                                                     <strong>{materialDisplayName({
                                                         materialName: item.materialName,
+                                                        categoryName: material?.categoryName,
                                                         widthMeters: material?.widthMeters,
                                                         kind: material?.kind,
                                                         colorCode: material?.colorCode,

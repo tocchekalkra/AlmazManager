@@ -103,6 +103,7 @@ data class MaterialItem(
     val name: String,
     val article: String,
     val categoryId: String,
+    val categoryName: String = "Без категории",
     val unit: String,
     val minimumQuantity: Double,
     val currentQuantity: Double,

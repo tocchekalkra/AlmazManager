@@ -14,6 +14,9 @@ public sealed class GetMaterialCatalogHandler
     private readonly IStockRepository
         _stockRepository;
 
+    private readonly ICategoryRepository
+        _categoryRepository;
+
     private readonly ICategoryAccessService
         _categoryAccessService;
 
@@ -29,6 +32,7 @@ public sealed class GetMaterialCatalogHandler
     public GetMaterialCatalogHandler(
         IMaterialRepository materialRepository,
         IStockRepository stockRepository,
+        ICategoryRepository categoryRepository,
         ICategoryAccessService categoryAccessService,
         IUserPreferenceRepository preferenceRepository,
         ICurrentUserService currentUserService,
@@ -39,6 +43,9 @@ public sealed class GetMaterialCatalogHandler
 
         _stockRepository =
             stockRepository;
+
+        _categoryRepository =
+            categoryRepository;
 
         _categoryAccessService =
             categoryAccessService;
@@ -72,6 +79,12 @@ public sealed class GetMaterialCatalogHandler
         var stocks =
             await _stockRepository
                 .GetAllAsync();
+
+        var categoryNames =
+            (await _categoryRepository.GetAllAsync())
+                .ToDictionary(
+                    category => category.Id,
+                    category => category.Name);
 
         var openSupplies = await _supplyInvoiceRepository.GetOpenAsync();
         var expectedByMaterialId = openSupplies
@@ -116,6 +129,9 @@ public sealed class GetMaterialCatalogHandler
                         material.Name,
                         material.Article,
                         material.CategoryId,
+                        categoryNames.GetValueOrDefault(
+                            material.CategoryId,
+                            "Без категории"),
                         material.Unit.ToString(),
                         material.MinimumQuantity,
                         currentQuantity,
@@ -195,12 +211,16 @@ public sealed class GetMaterialCatalogHandler
             string.IsNullOrWhiteSpace(request.Search))
         {
             var preference = await _preferenceRepository.GetByUserIdAsync(_currentUserService.UserId);
-            var order = (preference?.MaterialOrder ?? [])
+            var materialOrder = (preference?.MaterialOrder ?? [])
+                .Select((id, index) => new { id, index })
+                .ToDictionary(x => x.id, x => x.index);
+            var categoryOrder = (preference?.CategoryOrder ?? [])
                 .Select((id, index) => new { id, index })
                 .ToDictionary(x => x.id, x => x.index);
 
             query = query
-                .OrderBy(item => order.GetValueOrDefault(item.Id, int.MaxValue))
+                .OrderBy(item => categoryOrder.GetValueOrDefault(item.CategoryId, int.MaxValue))
+                .ThenBy(item => materialOrder.GetValueOrDefault(item.Id, int.MaxValue))
                 .ThenBy(item => item.Name);
         }
         else

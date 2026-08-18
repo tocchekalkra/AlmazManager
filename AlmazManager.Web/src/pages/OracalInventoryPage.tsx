@@ -328,11 +328,11 @@ export default function OracalInventoryPage() {
                                 actualQuantity:
                                     Math.max(
                                         0,
-                                        Number.isFinite(
-                                            value,
-                                        )
-                                            ? value
-                                            : 0,
+                                        Math.round(
+                                            (Number.isFinite(value)
+                                                ? value
+                                                : 0) * 100,
+                                        ) / 100,
                                     ),
 
                                 counted:
@@ -1082,7 +1082,7 @@ function WidthCells({
                 <input
                     type="number"
                     min="0"
-                    step="0.1"
+                    step="0.01"
                     value={
                         row.actualQuantity
                     }

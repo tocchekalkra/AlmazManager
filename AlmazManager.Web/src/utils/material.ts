@@ -6,6 +6,7 @@ const widthFormatter = new Intl.NumberFormat('ru-RU', {
 export type MaterialDisplaySource = {
     name?: string | null;
     materialName?: string | null;
+    categoryName?: string | null;
     widthMeters?: number | null;
     kind?: string | null;
     colorCode?: string | null;
@@ -36,7 +37,31 @@ export function materialDisplayName(material: MaterialDisplaySource) {
         return width ? `${label} - ${width}` : label;
     }
 
-    return width ? `${baseName} - ${width}` : baseName;
+    const filmMarkers = filmMarkerText(material.categoryName);
+    const label = width ? `${baseName} - ${width}` : baseName;
+
+    return filmMarkers ? `${label} · ${filmMarkers}` : label;
+}
+
+export function filmMarkerCodes(categoryName?: string | null) {
+    const normalized = categoryName?.toLowerCase() ?? '';
+    const isFilm = normalized.includes('плён') || normalized.includes('плен');
+
+    if (!isFilm) return [];
+
+    const codes: string[] = [];
+
+    if (normalized.includes('прозрач')) codes.push('П');
+    else if (normalized.includes('бел')) codes.push('Б');
+
+    if (normalized.includes('глян')) codes.push('Г');
+    else if (normalized.includes('мат')) codes.push('М');
+
+    return codes;
+}
+
+export function filmMarkerText(categoryName?: string | null) {
+    return filmMarkerCodes(categoryName).join(' · ');
 }
 
 export function filmCategoryParts(categoryName: string) {

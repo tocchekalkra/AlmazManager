@@ -20,6 +20,7 @@ import {
 
 import api from '../api/api';
 import { loadAllMaterialCatalogItems } from '../api/catalog';
+import { filmMarkerText } from '../utils/material';
 import { useNavigate } from 'react-router-dom';
 
 type MaterialCatalogItem = {
@@ -27,6 +28,7 @@ type MaterialCatalogItem = {
     name: string;
     article: string;
     categoryId: string;
+    categoryName: string;
     unit: string;
 
     minimumQuantity: number;
@@ -55,6 +57,7 @@ type IssueLine = {
 
     name: string;
     article: string;
+    categoryName: string;
 
     kind: string;
 
@@ -375,11 +378,11 @@ export default function IssuePage() {
                             .sort(
                                 (a, b) =>
                                     Number(
-                                        a.widthMeters ??
+                                        b.widthMeters ??
                                         0,
                                     ) -
                                     Number(
-                                        b.widthMeters ??
+                                        a.widthMeters ??
                                         0,
                                     ),
                             ),
@@ -627,7 +630,7 @@ export default function IssuePage() {
             return;
         }
 
-        const parsedQuantity =
+        let parsedQuantity =
             Number(
                 quantity.replace(
                     ',',
@@ -660,6 +663,10 @@ export default function IssuePage() {
             );
 
             return;
+        }
+
+        if (selectedMaterial.kind === 'Oracal641') {
+            parsedQuantity = Math.round(parsedQuantity * 100) / 100;
         }
 
         const alreadyAdded =
@@ -735,6 +742,9 @@ export default function IssuePage() {
                         article:
                             selectedMaterial.article,
 
+                        categoryName:
+                            selectedMaterial.categoryName,
+
                         kind:
                             selectedMaterial.kind,
 
@@ -803,13 +813,16 @@ export default function IssuePage() {
                 Math.round(
                     normalized,
                 );
+        } else {
+            normalized =
+                Math.round(normalized * 100) / 100;
         }
 
         normalized =
             Math.max(
                 line.kind ===
                     'Oracal641'
-                    ? 0.1
+                    ? 0.01
                     : 1,
                 normalized,
             );
@@ -1283,6 +1296,9 @@ export default function IssuePage() {
                                                                     material.widthMeters,
                                                                 )
                                                                 : 'Без ширины'}
+                                                            {filmMarkerText(material.categoryName)
+                                                                ? ` · ${filmMarkerText(material.categoryName)}`
+                                                                : ''}
                                                             {' · '}
                                                             доступно{' '}
                                                             {numberFormatter.format(
@@ -1455,6 +1471,9 @@ export default function IssuePage() {
                                     </button>
 
                                     <input
+                                        type="number"
+                                        min="0.01"
+                                        step="0.01"
                                         value={
                                             quantity
                                         }
@@ -1802,6 +1821,9 @@ export default function IssuePage() {
                                                         line.widthMeters,
                                                     )
                                                     : '—'}
+                                                {filmMarkerText(line.categoryName)
+                                                    ? ` · ${filmMarkerText(line.categoryName)}`
+                                                    : ''}
                                             </td>
 
                                             <td>
@@ -1848,7 +1870,7 @@ export default function IssuePage() {
                                                         min={
                                                             line.kind ===
                                                                 'Oracal641'
-                                                                ? '0.1'
+                                                                ? '0.01'
                                                                 : '1'
                                                         }
                                                         max={
@@ -1857,7 +1879,7 @@ export default function IssuePage() {
                                                         step={
                                                             line.kind ===
                                                                 'Oracal641'
-                                                                ? '0.1'
+                                                                ? '0.01'
                                                                 : '1'
                                                         }
                                                         value={

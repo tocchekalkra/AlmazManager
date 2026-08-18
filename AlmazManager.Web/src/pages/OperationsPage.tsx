@@ -49,6 +49,7 @@ type OperationJournalResponse = {
 type MaterialLookup = {
     id: string;
     categoryId: string;
+    categoryName: string;
     unit: string;
     widthMeters?: number | null;
 };
@@ -252,6 +253,7 @@ export default function OperationsPage() {
                                         <td>
                                             <strong>{materialDisplayName({
                                                 materialName: item.materialName,
+                                                categoryName: material?.categoryName,
                                                 widthMeters: material?.widthMeters,
                                             })}</strong>
                                             <div style={styles.subtle}>{item.materialArticle}</div>

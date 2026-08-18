@@ -11,6 +11,7 @@ type Material = {
     name: string;
     article: string;
     categoryId: string;
+    categoryName: string;
     kind: string;
     widthMeters?: number | null;
     colorCode?: string | null;

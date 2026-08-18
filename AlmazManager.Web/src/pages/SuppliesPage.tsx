@@ -19,6 +19,7 @@ type Material = {
   name: string;
   article: string;
   categoryId: string;
+  categoryName: string;
   unit: string;
   isActive: boolean;
   kind: string;
@@ -131,14 +132,15 @@ export default function SuppliesPage() {
 
   function addLine() {
     if (!materialId || quantity <= 0) return;
+    const normalizedQuantity = Math.max(1, Math.round(quantity));
     setLines((current) =>
       current.some((line) => line.materialId === materialId)
         ? current.map((line) =>
             line.materialId === materialId
-              ? { ...line, expectedQuantity: quantity }
+              ? { ...line, expectedQuantity: normalizedQuantity }
               : line,
           )
-        : [...current, { materialId, expectedQuantity: quantity }],
+        : [...current, { materialId, expectedQuantity: normalizedQuantity }],
     );
     setMaterialId("");
     setQuantity(1);
@@ -555,8 +557,8 @@ export default function SuppliesPage() {
               </select>
               <input
                 type="number"
-                min="0.001"
-                step="0.001"
+                min="1"
+                step="1"
                 value={quantity}
                 onChange={(event) => setQuantity(Number(event.target.value))}
               />

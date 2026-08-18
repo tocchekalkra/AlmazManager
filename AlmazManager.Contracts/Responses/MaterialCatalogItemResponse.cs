@@ -5,6 +5,7 @@ public sealed record MaterialCatalogItemResponse(
     string Name,
     string Article,
     Guid CategoryId,
+    string CategoryName,
     string Unit,
     decimal MinimumQuantity,
     decimal CurrentQuantity,

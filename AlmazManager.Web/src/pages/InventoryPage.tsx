@@ -18,12 +18,14 @@ import {
 
 import api from '../api/api';
 import { loadAllMaterialCatalogItems } from '../api/catalog';
+import { filmMarkerText } from '../utils/material';
 
 type MaterialCatalogItem = {
     id: string;
     name: string;
     article: string;
     categoryId: string;
+    categoryName: string;
     unit: string;
     minimumQuantity: number;
     currentQuantity: number;
@@ -37,6 +39,9 @@ type InventoryRow = {
     materialId: string;
     name: string;
     article: string;
+    categoryId: string;
+    categoryName: string;
+    kind: string;
     widthMeters?: number | null;
     expectedQuantity: number;
     actualQuantity: number;
@@ -46,6 +51,8 @@ type InventoryRow = {
 type StandardGroup = {
     key: string;
     name: string;
+    categoryId: string;
+    categoryName: string;
     rows: InventoryRow[];
 };
 
@@ -122,6 +129,15 @@ export default function InventoryPage() {
                         article:
                             material.article,
 
+                        categoryId:
+                            material.categoryId,
+
+                        categoryName:
+                            material.categoryName,
+
+                        kind:
+                            material.kind,
+
                         widthMeters:
                             material.widthMeters,
 
@@ -170,14 +186,14 @@ export default function InventoryPage() {
                     );
 
                 const key =
-                    name
-                        .trim()
-                        .toLowerCase();
+                    `${row.categoryId}::${name.trim().toLowerCase()}`;
 
                 const group =
                     map.get(key) ?? {
                         key,
                         name,
+                        categoryId: row.categoryId,
+                        categoryName: row.categoryName,
                         rows: [],
                     };
 
@@ -719,6 +735,10 @@ export default function InventoryPage() {
                             style={{
                                 marginTop:
                                     15,
+                                border:
+                                    '1px solid rgba(74,166,255,.24)',
+                                boxShadow:
+                                    '0 10px 28px rgba(0,0,0,.14)',
                             }}
                         >
                             <div
@@ -727,6 +747,9 @@ export default function InventoryPage() {
                                 }
                             >
                                 <div>
+                                    <p className="eyebrow">
+                                        {group.categoryName}
+                                    </p>
                                     <h2
                                         style={
                                             styles.groupTitle
@@ -813,6 +836,12 @@ export default function InventoryPage() {
                                                         )
                                                         : '—'}
                                                 </strong>
+
+                                                {filmMarkerText(row.categoryName) && (
+                                                    <span style={styles.filmMarker}>
+                                                        {filmMarkerText(row.categoryName)}
+                                                    </span>
+                                                )}
 
                                                 <div
                                                     style={
@@ -1327,6 +1356,17 @@ const styles: Record<
 
     width: {
         fontSize: 17,
+    },
+
+    filmMarker: {
+        display: 'inline-flex',
+        marginLeft: 7,
+        padding: '2px 6px',
+        border: '1px solid rgba(74,166,255,.35)',
+        borderRadius: 6,
+        color: '#93c5fd',
+        fontSize: 10,
+        fontWeight: 900,
     },
 
     article: {
