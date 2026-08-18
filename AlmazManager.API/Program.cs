@@ -56,6 +56,11 @@ builder.Configuration.AddJsonFile(
     optional: false,
     reloadOnChange: true);
 
+// Environment variables must be registered after jwtsettings.json so that
+// Docker values such as Jwt__SecretKey override the safe empty defaults from
+// the repository configuration file.
+builder.Configuration.AddEnvironmentVariables();
+
 
 // ============================================================
 // JWT SETTINGS
