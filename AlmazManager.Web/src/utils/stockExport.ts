@@ -4,6 +4,7 @@ export type ExportStockItem = {
     materialId: string;
     materialName: string;
     article: string;
+    categoryId: string;
     categoryName: string;
     unit: string;
     kind: string;
