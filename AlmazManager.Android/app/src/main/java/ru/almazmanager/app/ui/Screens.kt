@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -18,7 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,12 +27,21 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material.icons.filled.Warehouse
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -62,6 +71,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import ru.almazmanager.app.data.ApiClient
@@ -88,12 +98,18 @@ import java.text.DecimalFormat
 import java.time.OffsetDateTime
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 private val numberFormat = DecimalFormat("#,##0.##")
 private val dateFormat = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
 
 @Composable
-fun DashboardScreen(api: ApiService) {
+fun DashboardScreen(
+    api: ApiService,
+    fullName: String,
+    onOpenStock: () -> Unit,
+    onOpenDocuments: () -> Unit,
+) {
     var data by remember { mutableStateOf<DashboardResponse?>(null) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf("") }
@@ -116,13 +132,46 @@ fun DashboardScreen(api: ApiService) {
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        SectionHeader(
-            title = "Состояние склада",
-            subtitle = "Только категории, доступные текущему пользователю",
-            onRefresh = { refreshKey += 1 },
-        )
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+            ),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(
+                        "ALMAZMANAGER",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        "Добрый день, ${fullName.ifBlank { "сотрудник" }}",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        "Главное по складу на текущий момент",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        LocalDate.now().format(DateTimeFormatter.ofPattern("d MMMM yyyy", Locale("ru"))),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                IconButton(onClick = { refreshKey += 1 }) {
+                    Icon(Icons.Default.Refresh, contentDescription = "Обновить")
+                }
+            }
+        }
 
         if (loading) {
             LoadingBlock()
@@ -140,97 +189,214 @@ fun DashboardScreen(api: ApiService) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            MetricCard("Материалы", dashboard.activeMaterials.toString(), Modifier.weight(1f))
-            MetricCard("Ниже мин.", dashboard.belowMinimumCount.toString(), Modifier.weight(1f), warning = true)
+            DashboardMetricCard(
+                label = "Материалов",
+                hint = "Активные позиции",
+                value = dashboard.activeMaterials.toString(),
+                icon = Icons.Default.Warehouse,
+                tone = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.weight(1f),
+                onClick = onOpenStock,
+            )
+            DashboardMetricCard(
+                label = "Ниже минимума",
+                hint = "Требуют внимания",
+                value = dashboard.belowMinimumCount.toString(),
+                icon = Icons.Default.WarningAmber,
+                tone = Color(0xFFFFB454),
+                modifier = Modifier.weight(1f),
+                onClick = onOpenStock,
+            )
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            MetricCard("Приход сегодня", dashboard.receivingToday.toString(), Modifier.weight(1f))
-            MetricCard("Расход сегодня", dashboard.issueToday.toString(), Modifier.weight(1f))
+            DashboardMetricCard(
+                label = "Приход сегодня",
+                hint = "Проведённые позиции",
+                value = dashboard.receivingToday.toString(),
+                icon = Icons.Default.ArrowDownward,
+                tone = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.weight(1f),
+                onClick = onOpenDocuments,
+            )
+            DashboardMetricCard(
+                label = "Расход сегодня",
+                hint = "Проведённые позиции",
+                value = dashboard.issueToday.toString(),
+                icon = Icons.Default.ArrowUpward,
+                tone = MaterialTheme.colorScheme.error,
+                modifier = Modifier.weight(1f),
+                onClick = onOpenDocuments,
+            )
         }
-        MetricCard("Расход вчера", dashboard.issueYesterday.toString(), Modifier.fillMaxWidth())
+        DashboardMetricCard(
+            label = "Выдано вчера",
+            hint = "Проведённые позиции",
+            value = dashboard.issueYesterday.toString(),
+            icon = Icons.Default.CalendarMonth,
+            tone = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.fillMaxWidth(),
+            onClick = onOpenDocuments,
+        )
 
-        Text("Расход за 7 дней", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(dashboard.consumptionDays, key = { it.date }) { day ->
-                Card(
-                    modifier = Modifier.width(104.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                ) {
-                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(day.date.takeLast(5).replace('-', '.'), style = MaterialTheme.typography.labelMedium)
-                        Text(day.documentCount.toString(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                        Text("документов", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        day.topMaterial?.let { Text(it, style = MaterialTheme.typography.labelSmall, maxLines = 2) }
-                    }
-                }
-            }
-        }
-
-        Text("Требуют внимания", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        if (dashboard.attentionMaterials.isEmpty()) {
-            SuccessBlock("Все доступные материалы находятся в норме.")
-        } else {
-            dashboard.attentionMaterials.take(3).forEach { material ->
-                SurfaceRow {
+        val maxActivity = maxOf(1, dashboard.consumptionDays.maxOfOrNull { it.itemCount } ?: 1)
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.BarChart, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(8.dp))
                     Column(Modifier.weight(1f)) {
+                        Text("Расход материалов по дням", fontWeight = FontWeight.Bold)
                         Text(
-                            material.name + filmMarkerText(material.category)
-                                .let { if (it.isBlank()) "" else " · $it" },
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            "${material.article} · ${material.category}",
+                            "Последние 7 дней",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Text(
-                        "${numberFormat.format(material.quantity)} ${unitLabel(material.unit)}",
-                        color = MaterialTheme.colorScheme.error,
-                        fontWeight = FontWeight.Bold,
-                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    dashboard.consumptionDays.forEach { day ->
+                        val barHeight = (18 + 62 * day.itemCount / maxActivity).dp
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(day.itemCount.toString(), style = MaterialTheme.typography.labelSmall)
+                            Spacer(Modifier.height(4.dp))
+                            Box(
+                                Modifier.width(24.dp).height(barHeight).background(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
+                                    RoundedCornerShape(topStart = 7.dp, topEnd = 7.dp),
+                                ),
+                            )
+                            Spacer(Modifier.height(5.dp))
+                            Text(
+                                day.date.takeLast(5).replace('-', '.'),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+                if (dashboard.consumptionDays.isEmpty()) {
+                    Text("За последние дни расхода не было.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
 
-        Text("Последние операции", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        dashboard.recentOperations.take(3).forEach { operation ->
-            SurfaceRow {
-                Column(Modifier.weight(1f)) {
-                    Text(operation.materialName, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        "${operationLabel(operation.type)} · ${operation.userFullName}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+        DashboardPanel(
+            title = "Требуют внимания",
+            subtitle = "Три наиболее критичные позиции",
+            icon = Icons.Default.WarningAmber,
+            actionLabel = "Показать все",
+            onAction = onOpenStock,
+        ) {
+            if (dashboard.attentionMaterials.isEmpty()) {
+                SuccessBlock("Все доступные материалы находятся в норме.")
+            } else {
+                dashboard.attentionMaterials.take(3).forEachIndexed { index, material ->
+                    if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                material.name + filmMarkerText(material.category)
+                                    .let { if (it.isBlank()) "" else " · $it" },
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                "${material.article} · ${material.category}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                "${numberFormat.format(material.quantity)} ${unitLabel(material.unit)}",
+                                color = MaterialTheme.colorScheme.error,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                "мин. ${numberFormat.format(material.minimumQuantity)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
-                Text(
-                    signed(operation.quantityChange, operation.unit),
-                    color = if (operation.quantityChange < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary,
-                    fontWeight = FontWeight.Bold,
-                )
             }
         }
 
-        Text("Последние документы", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        dashboard.recentDocuments.take(3).forEach { document ->
-            SurfaceRow {
-                Column(Modifier.weight(1f)) {
-                    Text(document.number, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        "${documentTypeLabel(document.type)} · ${document.userFullName}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+        DashboardPanel(
+            title = "Последние документы",
+            subtitle = "Три последние складские операции",
+            icon = Icons.Default.Description,
+            actionLabel = "Открыть журнал",
+            onAction = onOpenDocuments,
+        ) {
+            if (dashboard.recentDocuments.isEmpty()) {
+                Text("Операций пока нет.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                dashboard.recentDocuments.take(3).forEachIndexed { index, document ->
+                    if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenDocuments).padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            Modifier.size(36.dp).background(
+                                if (document.type == "Receiving") MaterialTheme.colorScheme.secondary.copy(alpha = 0.14f)
+                                else MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
+                                RoundedCornerShape(10.dp),
+                            ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                if (document.type == "Receiving") Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
+                                contentDescription = null,
+                                tint = if (document.type == "Receiving") MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error,
+                            )
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "${document.number} · ${documentTypeLabel(document.type)}",
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                document.summary.ifBlank { "Состав не указан" },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                            )
+                        }
+                        Text("${document.itemCount} поз.", style = MaterialTheme.typography.labelMedium)
+                    }
                 }
-                Text("${document.itemCount} поз.", fontWeight = FontWeight.Bold)
             }
         }
     }
 }
+
+private data class StockMaterialGroup(
+    val key: String,
+    val name: String,
+    val items: List<StockItem>,
+)
+
+private data class StockCategoryGroup(
+    val id: String,
+    val name: String,
+    val materials: List<StockMaterialGroup>,
+)
 
 @Composable
 fun StockScreen(api: ApiService) {
@@ -265,39 +431,41 @@ fun StockScreen(api: ApiService) {
     val grouped = filtered
         .groupBy { it.categoryId }
         .map { (categoryId, categoryItems) ->
-            Triple(
-                categoryId,
-                if (categoryItems.firstOrNull()?.kind == "Oracal641")
+            StockCategoryGroup(
+                id = categoryId,
+                name = if (categoryItems.firstOrNull()?.kind == "Oracal641")
                     "ORACAL 641"
                 else
                     categoryItems.firstOrNull()?.categoryName ?: "Без категории",
-                categoryItems
-                    .groupBy { item ->
-                        if (item.kind == "Oracal641")
-                            listOfNotNull(item.colorCode, item.colorName).joinToString(" ")
-                        else
-                            item.materialName
-                                .replace(Regex("\\s+-?\\s*\\d+(?:[.,]\\d+)?\\s*м\\s*$", RegexOption.IGNORE_CASE), "")
-                                .trim()
-                    }
-                    .values
-                    .flatMap { widths -> widths.sortedByDescending { it.widthMeters ?: 0.0 } },
+                materials = categoryItems
+                    .groupBy(::stockBaseName)
+                    .map { (materialName, widths) ->
+                        StockMaterialGroup(
+                            key = materialName,
+                            name = materialName,
+                            items = widths.sortedByDescending { it.widthMeters ?: 0.0 },
+                        )
+                    },
             )
         }
 
-    fun moveMaterial(materialId: String, direction: Int) {
+    fun moveMaterialGroup(categoryId: String, materialKey: String, direction: Int) {
         if (!orderMode || savingOrder) return
-        val next = allItems.toMutableList()
-        val from = next.indexOfFirst { it.materialId == materialId }
+        val categoryItems = allItems.filter { it.categoryId == categoryId }
+        val materialGroups = categoryItems.groupBy(::stockBaseName).entries.toMutableList()
+        val from = materialGroups.indexOfFirst { it.key == materialKey }
         if (from < 0) return
-        val categoryId = next[from].categoryId
-        val categoryIndices = next.indices.filter { next[it].categoryId == categoryId }
-        val position = categoryIndices.indexOf(from)
-        val targetPosition = (position + direction).coerceIn(0, categoryIndices.lastIndex)
-        val to = categoryIndices[targetPosition]
-        if (from < 0 || from == to) return
-        val moved = next.removeAt(from)
-        next.add(to, moved)
+        val to = (from + direction).coerceIn(0, materialGroups.lastIndex)
+        if (from == to) return
+        val moved = materialGroups.removeAt(from)
+        materialGroups.add(to, moved)
+
+        val reorderedCategory = materialGroups.flatMap { entry ->
+            entry.value.sortedByDescending { it.widthMeters ?: 0.0 }
+        }
+        val firstCategoryIndex = allItems.indexOfFirst { it.categoryId == categoryId }
+        val next = allItems.filterNot { it.categoryId == categoryId }.toMutableList()
+        next.addAll(firstCategoryIndex.coerceAtLeast(0).coerceAtMost(next.size), reorderedCategory)
         allItems = next
 
         scope.launch {
@@ -402,14 +570,14 @@ fun StockScreen(api: ApiService) {
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                grouped.forEachIndexed { categoryIndex, (categoryId, categoryName, categoryItems) ->
-                    item(key = "category-$categoryName") {
+                grouped.forEachIndexed { categoryIndex, category ->
+                    item(key = "category-${category.id}") {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                categoryName,
+                                category.name,
                                 modifier = Modifier.weight(1f),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
@@ -417,71 +585,106 @@ fun StockScreen(api: ApiService) {
                             )
                             if (orderMode) {
                                 IconButton(
-                                    onClick = { moveCategory(categoryId, -1) },
+                                    onClick = { moveCategory(category.id, -1) },
                                     enabled = categoryIndex > 0,
                                 ) { Text("↑", fontWeight = FontWeight.Bold) }
                                 IconButton(
-                                    onClick = { moveCategory(categoryId, 1) },
+                                    onClick = { moveCategory(category.id, 1) },
                                     enabled = categoryIndex < grouped.lastIndex,
                                 ) { Text("↓", fontWeight = FontWeight.Bold) }
                             }
                         }
                     }
 
-                    items(categoryItems, key = { it.materialId }) { item ->
-                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            if (item.kind == "Oracal641" && !item.colorHex.isNullOrBlank()) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(28.dp)
-                                        .background(parseHexColor(item.colorHex), RoundedCornerShape(7.dp)),
-                                )
-                                Spacer(Modifier.width(10.dp))
-                            }
-                            Column(Modifier.weight(1f)) {
-                                Text(stockDisplayName(item), fontWeight = FontWeight.SemiBold)
-                                Text(
-                                    item.article,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(
-                                    "${numberFormat.format(item.currentQuantity)} ${unitLabel(item.unit)}",
-                                    fontWeight = FontWeight.Bold,
-                                )
-                                Text(
-                                    if (item.belowMinimum) "ниже минимума" else "в норме",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (item.belowMinimum) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary,
-                                )
-                                if (item.expectedQuantity > 0) {
-                                    Text(
-                                        "+${numberFormat.format(item.expectedQuantity)} ${unitLabel(item.unit)} в пути",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.primary,
-                                    )
-                                }
-                            }
-                            if (orderMode) {
-                                Spacer(Modifier.width(8.dp))
-                                Column {
-                                    IconButton(onClick = { moveMaterial(item.materialId, -1) }) {
-                                        Text("↑", fontWeight = FontWeight.Bold)
+                    category.materials.forEachIndexed { materialIndex, materialGroup ->
+                        item(key = "stock-material-${category.id}-${materialGroup.key}") {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)),
+                            ) {
+                                Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        materialGroup.items.firstOrNull()?.takeIf {
+                                            it.kind == "Oracal641" && !it.colorHex.isNullOrBlank()
+                                        }?.let { first ->
+                                            Box(
+                                                Modifier.size(26.dp).background(
+                                                    parseHexColor(first.colorHex.orEmpty()),
+                                                    RoundedCornerShape(7.dp),
+                                                ),
+                                            )
+                                            Spacer(Modifier.width(9.dp))
+                                        }
+                                        Column(Modifier.weight(1f)) {
+                                            Text(
+                                                materialGroup.name,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                            )
+                                            filmDescription(category.name).takeIf { it.isNotBlank() }?.let { film ->
+                                                Text(
+                                                    film,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                )
+                                            }
+                                        }
+                                        if (orderMode) {
+                                            IconButton(
+                                                onClick = { moveMaterialGroup(category.id, materialGroup.key, -1) },
+                                                enabled = materialIndex > 0,
+                                            ) { Text("↑", fontWeight = FontWeight.Bold) }
+                                            IconButton(
+                                                onClick = { moveMaterialGroup(category.id, materialGroup.key, 1) },
+                                                enabled = materialIndex < category.materials.lastIndex,
+                                            ) { Text("↓", fontWeight = FontWeight.Bold) }
+                                        }
                                     }
-                                    IconButton(onClick = { moveMaterial(item.materialId, 1) }) {
-                                        Text("↓", fontWeight = FontWeight.Bold)
+
+                                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                                    materialGroup.items.forEachIndexed { widthIndex, stock ->
+                                        if (widthIndex > 0) {
+                                            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f))
+                                        }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 9.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Column(Modifier.weight(1f)) {
+                                                Text(
+                                                    stock.widthMeters?.let { "${numberFormat.format(it)} м" } ?: "Без ширины",
+                                                    fontWeight = FontWeight.SemiBold,
+                                                )
+                                                Text(
+                                                    stock.article,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
+                                            Column(horizontalAlignment = Alignment.End) {
+                                                Text(
+                                                    "${numberFormat.format(stock.currentQuantity)} ${unitLabel(stock.unit)}",
+                                                    fontWeight = FontWeight.Bold,
+                                                )
+                                                Text(
+                                                    if (stock.belowMinimum) "ниже минимума" else "в норме",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = if (stock.belowMinimum) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary,
+                                                )
+                                                if (stock.expectedQuantity > 0) {
+                                                    Text(
+                                                        "+${numberFormat.format(stock.expectedQuantity)} ${unitLabel(stock.unit)} в пути",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.primary,
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
                 }
             }
         }
@@ -1014,6 +1217,7 @@ fun SuppliesScreen(api: ApiService) {
     var error by remember { mutableStateOf("") }
     var success by remember { mutableStateOf("") }
     var refreshKey by remember { mutableStateOf(0) }
+    var expandedSupplyId by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(refreshKey) {
         try {
@@ -1182,14 +1386,34 @@ fun SuppliesScreen(api: ApiService) {
 
         if (!loading && supplies.isEmpty()) item { SuccessBlock("Активных поставок нет.") }
         items(supplies, key = { it.id }) { supply ->
-            SupplyCard(supply)
+            SupplyCard(
+                supply = supply,
+                materialById = materials.associateBy { it.id },
+                expanded = expandedSupplyId == supply.id,
+                onToggle = {
+                    expandedSupplyId = if (expandedSupplyId == supply.id) null else supply.id
+                },
+            )
         }
     }
 }
 
 @Composable
-private fun SupplyCard(supply: SupplyInvoiceResponse) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+private fun SupplyCard(
+    supply: SupplyInvoiceResponse,
+    materialById: Map<String, MaterialItem>,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onToggle),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(
+            1.dp,
+            if (expanded) MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+            else MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -1200,7 +1424,14 @@ private fun SupplyCard(supply: SupplyInvoiceResponse) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Text(supplyStatusLabel(supply.status), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(supplyStatusLabel(supply.status), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                    Icon(
+                        if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (expanded) "Свернуть" else "Открыть подробно",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             Text("Сумма: ${numberFormat.format(supply.amount)} ₽")
             supply.expectedDeliveryDate?.let {
@@ -1211,6 +1442,53 @@ private fun SupplyCard(supply: SupplyInvoiceResponse) {
                 "Позиций: ${supply.items.size} · осталось принять: ${numberFormat.format(remaining)}",
                 style = MaterialTheme.typography.bodySmall,
             )
+            if (!expanded) {
+                Text(
+                    "Нажмите, чтобы посмотреть состав поставки",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            } else {
+                HorizontalDivider(Modifier.padding(vertical = 7.dp))
+                supply.paymentDueDate?.let {
+                    Text("Оплатить до: ${formatShortDate(it)}", style = MaterialTheme.typography.bodySmall)
+                }
+                supply.comment?.takeIf { it.isNotBlank() }?.let {
+                    Text("Комментарий: $it", style = MaterialTheme.typography.bodySmall)
+                }
+                Text("Материалы", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
+                if (supply.items.isEmpty()) {
+                    Text("Материалы не указаны", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                supply.items.forEachIndexed { index, item ->
+                    if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f))
+                    val material = materialById[item.materialId]
+                    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                        Text(
+                            material?.let(::materialDisplayName) ?: "Материал из архива",
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        material?.article?.let {
+                            Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(
+                                "Ожидалось: ${numberFormat.format(item.expectedQuantity)} ${unitLabel(material?.unit.orEmpty())}",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            Text(
+                                "Получено: ${numberFormat.format(item.receivedQuantity)}",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        Text(
+                            "Осталось: ${numberFormat.format(item.remainingQuantity)} ${unitLabel(material?.unit.orEmpty())}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (item.remainingQuantity > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -1265,6 +1543,8 @@ fun InventoryScreen(api: ApiService, oracal: Boolean) {
     var comment by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
+    var orderMode by remember { mutableStateOf(false) }
+    var savingOrder by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
     var success by remember { mutableStateOf("") }
     var refreshKey by remember { mutableStateOf(0) }
@@ -1293,6 +1573,39 @@ fun InventoryScreen(api: ApiService, oracal: Boolean) {
         else category to categoryMaterials.groupBy(::materialBaseName)
     }
 
+    fun moveInventoryMaterial(categoryId: String, materialName: String, direction: Int) {
+        if (!orderMode || savingOrder) return
+        val categoryMaterials = materials.filter { it.categoryId == categoryId }
+        val materialGroups = categoryMaterials.groupBy(::materialBaseName).entries.toMutableList()
+        val from = materialGroups.indexOfFirst { it.key == materialName }
+        if (from < 0) return
+        val to = (from + direction).coerceIn(0, materialGroups.lastIndex)
+        if (from == to) return
+        val moved = materialGroups.removeAt(from)
+        materialGroups.add(to, moved)
+
+        val reorderedCategory = materialGroups.flatMap { entry ->
+            entry.value.sortedByDescending { it.widthMeters ?: 0.0 }
+        }
+        val firstCategoryIndex = materials.indexOfFirst { it.categoryId == categoryId }
+        val next = materials.filterNot { it.categoryId == categoryId }.toMutableList()
+        next.addAll(firstCategoryIndex.coerceAtLeast(0).coerceAtMost(next.size), reorderedCategory)
+        materials = next
+
+        scope.launch {
+            try {
+                savingOrder = true
+                error = ""
+                api.updatePreferences(UpdatePreferencesRequest(materialOrder = next.map { it.id }))
+            } catch (requestError: Throwable) {
+                error = ApiClient.errorMessage(requestError)
+                refreshKey += 1
+            } finally {
+                savingOrder = false
+            }
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -1301,6 +1614,37 @@ fun InventoryScreen(api: ApiService, oracal: Boolean) {
             if (oracal) "Инвентаризация ORACAL" else "Инвентаризация склада",
             "Сначала нажмите на нужную ширину, затем используйте кнопки минус и плюс.",
             onRefresh = { counts.clear(); selectedMaterialId = null; refreshKey += 1 },
+        )
+
+        OutlinedButton(
+            onClick = {
+                orderMode = !orderMode
+                selectedMaterialId = null
+            },
+            enabled = !savingOrder,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(
+                if (orderMode) Icons.Default.Lock else Icons.Default.LockOpen,
+                contentDescription = null,
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                when {
+                    savingOrder -> "Сохранение..."
+                    orderMode -> "Завершить порядок"
+                    else -> "Изменить порядок материалов"
+                },
+            )
+        }
+
+        Text(
+            if (orderMode)
+                "Перемещение включено. Используйте стрелки у названия материала."
+            else
+                "Порядок защищён от случайного изменения.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         if (error.isNotBlank()) ErrorBlock(error)
@@ -1322,7 +1666,7 @@ fun InventoryScreen(api: ApiService, oracal: Boolean) {
                     )
                 }
 
-                materialGroups.forEach { (materialName, widths) ->
+                materialGroups.entries.forEachIndexed { materialIndex, (materialName, widths) ->
                     item(key = "inventory-group-${category.id}-$materialName") {
                         Card(
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -1332,22 +1676,63 @@ fun InventoryScreen(api: ApiService, oracal: Boolean) {
                             ),
                         ) {
                             Column(Modifier.fillMaxWidth().padding(10.dp)) {
-                                Text(
-                                    materialName,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 5.dp),
-                                    fontWeight = FontWeight.Bold,
-                                )
-                                Text(
-                                    "Ширина     Фактически                По системе",
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(materialName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                        filmDescription(category.name).takeIf { it.isNotBlank() }?.let { film ->
+                                            Text(
+                                                film,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                            )
+                                        }
+                                    }
+                                    if (orderMode) {
+                                        IconButton(
+                                            onClick = { moveInventoryMaterial(category.id, materialName, -1) },
+                                            enabled = materialIndex > 0,
+                                        ) { Text("↑", fontWeight = FontWeight.Bold) }
+                                        IconButton(
+                                            onClick = { moveInventoryMaterial(category.id, materialName, 1) },
+                                            enabled = materialIndex < materialGroups.size - 1,
+                                        ) { Text("↓", fontWeight = FontWeight.Bold) }
+                                    }
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 5.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        "ШИРИНА",
+                                        modifier = Modifier.weight(1f),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                    Text(
+                                        "ПО СИСТЕМЕ",
+                                        modifier = Modifier.width(72.dp),
+                                        textAlign = TextAlign.Center,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Text(
+                                        "ПО ФАКТУ",
+                                        modifier = Modifier.width(130.dp),
+                                        textAlign = TextAlign.Center,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
 
                                 widths.sortedByDescending { it.widthMeters ?: 0.0 }.forEach { material ->
                                     val selected = selectedMaterialId == material.id
                                     val actual = parseNumber(counts[material.id].orEmpty())
-                                    val displayActual = actual ?: material.currentQuantity
+                                    val displayActual = actual ?: 0.0
                                     val quantityStep = if (oracal) 0.01 else 1.0
 
                                     Column(
@@ -1358,63 +1743,83 @@ fun InventoryScreen(api: ApiService, oracal: Boolean) {
                                                 else Color.Transparent,
                                                 RoundedCornerShape(9.dp),
                                             )
-                                            .clickable {
+                                            .clickable(enabled = !orderMode) {
                                                 selectedMaterialId = material.id
                                                 if (counts[material.id].isNullOrBlank()) {
-                                                    counts[material.id] = numberFormat.format(material.currentQuantity)
+                                                    counts[material.id] = "0"
                                                 }
                                             }
                                             .padding(horizontal = 5.dp, vertical = 6.dp),
                                     ) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            if (oracal && !material.colorHex.isNullOrBlank()) {
-                                                Box(
-                                                    Modifier.size(18.dp).background(
-                                                        parseHexColor(material.colorHex),
-                                                        RoundedCornerShape(5.dp),
-                                                    ),
-                                                )
-                                                Spacer(Modifier.width(6.dp))
-                                            }
-                                            Text(
-                                                (material.widthMeters?.let { "${numberFormat.format(it)} м" } ?: "—") +
-                                                    filmMarkerText(category.name).let { if (it.isBlank()) "" else " · $it" },
-                                                modifier = Modifier.width(95.dp),
-                                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                            )
-                                            OutlinedButton(
-                                                onClick = {
-                                                    counts[material.id] = numberFormat.format(
-                                                        roundToStep(
-                                                            (displayActual - quantityStep).coerceAtLeast(0.0),
-                                                            quantityStep,
+                                            Row(
+                                                modifier = Modifier.weight(1f),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                if (oracal && !material.colorHex.isNullOrBlank()) {
+                                                    Box(
+                                                        Modifier.size(18.dp).background(
+                                                            parseHexColor(material.colorHex),
+                                                            RoundedCornerShape(5.dp),
                                                         ),
                                                     )
-                                                },
-                                                enabled = selected,
-                                                modifier = Modifier.size(42.dp),
-                                            ) { Text("−", style = MaterialTheme.typography.titleLarge) }
-                                            Text(
-                                                numberFormat.format(displayActual),
-                                                modifier = Modifier.width(64.dp),
-                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                                fontWeight = FontWeight.Bold,
-                                            )
-                                            OutlinedButton(
-                                                onClick = {
-                                                    counts[material.id] = numberFormat.format(
-                                                        roundToStep(displayActual + quantityStep, quantityStep),
+                                                    Spacer(Modifier.width(6.dp))
+                                                }
+                                                Column {
+                                                    Text(
+                                                        material.widthMeters?.let { "${numberFormat.format(it)} м" } ?: "—",
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                                                     )
-                                                },
-                                                enabled = selected,
-                                                modifier = Modifier.size(42.dp),
-                                            ) { Text("+", style = MaterialTheme.typography.titleLarge) }
+                                                    filmDescription(category.name).takeIf { it.isNotBlank() }?.let { film ->
+                                                        Text(
+                                                            film,
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        )
+                                                    }
+                                                }
+                                            }
                                             Text(
                                                 numberFormat.format(material.currentQuantity),
-                                                modifier = Modifier.weight(1f),
-                                                textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                                                modifier = Modifier.width(72.dp),
+                                                textAlign = TextAlign.Center,
                                                 fontWeight = FontWeight.Bold,
                                             )
+                                            Row(
+                                                modifier = Modifier.width(130.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                            ) {
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        counts[material.id] = numberFormat.format(
+                                                            roundToStep(
+                                                                (displayActual - quantityStep).coerceAtLeast(0.0),
+                                                                quantityStep,
+                                                            ),
+                                                        )
+                                                    },
+                                                    enabled = selected && displayActual > 0,
+                                                    modifier = Modifier.size(38.dp),
+                                                ) { Text("−", style = MaterialTheme.typography.titleMedium) }
+                                                Text(
+                                                    numberFormat.format(displayActual),
+                                                    modifier = Modifier.width(48.dp),
+                                                    textAlign = TextAlign.Center,
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                )
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        counts[material.id] = numberFormat.format(
+                                                            roundToStep(displayActual + quantityStep, quantityStep),
+                                                        )
+                                                    },
+                                                    enabled = selected,
+                                                    modifier = Modifier.size(38.dp),
+                                                ) { Text("+", style = MaterialTheme.typography.titleMedium) }
+                                            }
                                         }
                                         Row(
                                             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
@@ -1518,11 +1923,15 @@ private data class DisplayDocument(
     val createdAtUtc: String,
     val itemCount: Int,
     val subtitle: String,
+    val warehouse: WarehouseDocumentResponse? = null,
+    val inventory: InventoryDocumentResponse? = null,
 )
 
 @Composable
 fun DocumentsScreen(api: ApiService) {
     var documents by remember { mutableStateOf<List<DisplayDocument>>(emptyList()) }
+    var materialById by remember { mutableStateOf<Map<String, MaterialItem>>(emptyMap()) }
+    var expandedDocumentKey by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf("") }
     var refreshKey by remember { mutableStateOf(0) }
@@ -1533,6 +1942,7 @@ fun DocumentsScreen(api: ApiService) {
             error = ""
             val warehouse = api.getWarehouseDocuments()
             val inventory = api.getInventoryDocuments()
+            materialById = api.loadAllMaterials().associateBy { it.id }
 
             documents = (
                 warehouse.map { it.toDisplayDocument() } +
@@ -1559,14 +1969,33 @@ fun DocumentsScreen(api: ApiService) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(documents, key = { "${it.type}-${it.id}" }) { document ->
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                val documentKey = "${document.type}-${document.id}"
+                val expanded = expandedDocumentKey == documentKey
+                Card(
+                    modifier = Modifier.fillMaxWidth().clickable {
+                        expandedDocumentKey = if (expanded) null else documentKey
+                    },
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(
+                        1.dp,
+                        if (expanded) MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+                        else MaterialTheme.colorScheme.surfaceVariant,
+                    ),
+                ) {
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(5.dp),
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(document.number, Modifier.weight(1f), fontWeight = FontWeight.Bold)
-                            Text(statusLabel(document.status), color = statusColor(document.status), fontWeight = FontWeight.SemiBold)
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(statusLabel(document.status), color = statusColor(document.status), fontWeight = FontWeight.SemiBold)
+                                Icon(
+                                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = if (expanded) "Свернуть" else "Открыть документ",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                         Text(
                             "${documentTypeLabel(document.type)} · ${formatDate(document.createdAtUtc)}",
@@ -1576,10 +2005,126 @@ fun DocumentsScreen(api: ApiService) {
                             "${document.itemCount} позиций${if (document.subtitle.isNotBlank()) " · ${document.subtitle}" else ""}",
                             style = MaterialTheme.typography.bodySmall,
                         )
+                        if (!expanded) {
+                            Text(
+                                "Нажмите, чтобы посмотреть материалы",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        } else {
+                            DocumentDetails(document, materialById)
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DocumentDetails(
+    document: DisplayDocument,
+    materialById: Map<String, MaterialItem>,
+) {
+    HorizontalDivider(Modifier.padding(vertical = 7.dp))
+
+    document.warehouse?.let { warehouse ->
+        warehouse.supplier?.takeIf { it.isNotBlank() }?.let {
+            Text("Поставщик: $it", style = MaterialTheme.typography.bodySmall)
+        }
+        warehouse.externalNumber?.takeIf { it.isNotBlank() }?.let {
+            Text("Накладная: $it", style = MaterialTheme.typography.bodySmall)
+        }
+        warehouse.recipient?.takeIf { it.isNotBlank() }?.let {
+            Text("Получатель: $it", style = MaterialTheme.typography.bodySmall)
+        }
+        warehouse.comment?.takeIf { it.isNotBlank() }?.let {
+            Text("Комментарий: $it", style = MaterialTheme.typography.bodySmall)
+        }
+        Text("Материалы", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 5.dp))
+        if (warehouse.items.isEmpty()) {
+            Text("Материалы не указаны", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        warehouse.items.forEachIndexed { index, item ->
+            if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f))
+            val material = materialById[item.materialId]
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(material?.let(::materialDisplayName) ?: "Материал из архива", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        material?.article ?: item.materialId,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Text(
+                    "${numberFormat.format(item.quantity)} ${unitLabel(material?.unit.orEmpty())}",
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+    }
+
+    document.inventory?.let { inventory ->
+        inventory.comment?.takeIf { it.isNotBlank() }?.let {
+            Text("Комментарий: $it", style = MaterialTheme.typography.bodySmall)
+        }
+        Text("Материалы", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 5.dp))
+        if (inventory.items.isEmpty()) {
+            Text("Материалы не указаны", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        inventory.items.forEachIndexed { index, item ->
+            if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f))
+            val material = materialById[item.materialId]
+            Column(Modifier.fillMaxWidth().padding(vertical = 9.dp)) {
+                Text(
+                    material?.let(::materialDisplayName) ?: item.materialName,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    item.article ?: material?.article ?: "—",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    InventoryDetailValue("По системе", item.expectedQuantity, item.unit)
+                    InventoryDetailValue("По факту", item.actualQuantity, item.unit)
+                    InventoryDetailValue(
+                        "Разница",
+                        item.difference,
+                        item.unit,
+                        color = when {
+                            item.difference < 0 -> MaterialTheme.colorScheme.error
+                            item.difference > 0 -> MaterialTheme.colorScheme.secondary
+                            else -> MaterialTheme.colorScheme.onSurface
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InventoryDetailValue(
+    label: String,
+    value: Double,
+    unit: String,
+    color: Color = MaterialTheme.colorScheme.onSurface,
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            "${if (label == "Разница" && value > 0) "+" else ""}${numberFormat.format(value)} ${unitLabel(unit)}",
+            fontWeight = FontWeight.Bold,
+            color = color,
+        )
     }
 }
 
@@ -1730,24 +2275,69 @@ private fun SectionHeader(
 }
 
 @Composable
-private fun MetricCard(
+private fun DashboardMetricCard(
     label: String,
+    hint: String,
     value: String,
+    icon: ImageVector,
+    tone: Color,
     modifier: Modifier = Modifier,
-    warning: Boolean = false,
+    onClick: () -> Unit,
 ) {
     Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = modifier.clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = tone.copy(alpha = 0.10f)),
+        border = BorderStroke(1.dp, tone.copy(alpha = 0.30f)),
     ) {
-        Column(Modifier.padding(14.dp)) {
-            Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-            Text(
-                value,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = if (warning) Color(0xFFFFB454) else MaterialTheme.colorScheme.onSurface,
-            )
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Box(
+                Modifier.size(34.dp).background(tone.copy(alpha = 0.16f), RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(icon, contentDescription = null, tint = tone, modifier = Modifier.size(20.dp))
+            }
+            Text(value, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(label, fontWeight = FontWeight.SemiBold)
+            Text(hint, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+@Composable
+private fun DashboardPanel(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    actionLabel: String,
+    onAction: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(36.dp).background(
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                        RoundedCornerShape(10.dp),
+                    ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                }
+                Spacer(Modifier.width(9.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(title, fontWeight = FontWeight.Bold)
+                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                OutlinedButton(onClick = onAction) {
+                    Text(actionLabel, style = MaterialTheme.typography.labelSmall)
+                }
+            }
+            HorizontalDivider(Modifier.padding(top = 12.dp))
+            content()
         }
     }
 }
@@ -1848,6 +2438,18 @@ private fun stockDisplayName(material: StockItem): String {
     return if (markers.isBlank()) label else "$label · $markers"
 }
 
+private fun stockBaseName(material: StockItem): String {
+    if (material.kind == "Oracal641") {
+        return listOfNotNull(material.colorCode, material.colorName)
+            .joinToString(" ")
+            .ifBlank { "ORACAL 641" }
+    }
+
+    return material.materialName
+        .replace(Regex("\\s+-?\\s*\\d+(?:[.,]\\d+)?\\s*м\\s*$", RegexOption.IGNORE_CASE), "")
+        .trim()
+}
+
 private fun filmMarkerText(categoryName: String?): String {
     val normalized = categoryName.orEmpty().lowercase()
     if (!normalized.contains("плён") && !normalized.contains("плен")) return ""
@@ -1862,6 +2464,23 @@ private fun filmMarkerText(categoryName: String?): String {
         normalized.contains("мат") -> codes += "М"
     }
     return codes.joinToString(" · ")
+}
+
+private fun filmDescription(categoryName: String?): String {
+    val normalized = categoryName.orEmpty().lowercase()
+    if (!normalized.contains("плён") && !normalized.contains("плен")) return ""
+
+    val transparency = when {
+        normalized.contains("прозрач") -> "Прозрачная"
+        normalized.contains("бел") -> "Белая"
+        else -> ""
+    }
+    val surface = when {
+        normalized.contains("глян") -> "Глянцевая"
+        normalized.contains("мат") -> "Матовая"
+        else -> ""
+    }
+    return listOf(transparency, surface).filter { it.isNotBlank() }.joinToString(" · ")
 }
 
 private fun materialBaseName(material: MaterialItem): String {
@@ -1986,6 +2605,9 @@ private fun formatDate(value: String): String = runCatching {
     value.replace('T', ' ').take(16)
 }
 
+private fun formatShortDate(value: String): String =
+    value.split('-').takeIf { it.size == 3 }?.reversed()?.joinToString(".") ?: value
+
 private fun WarehouseDocumentResponse.toDisplayDocument() = DisplayDocument(
     id = id,
     number = number,
@@ -1994,6 +2616,7 @@ private fun WarehouseDocumentResponse.toDisplayDocument() = DisplayDocument(
     createdAtUtc = createdAtUtc,
     itemCount = items.size,
     subtitle = listOfNotNull(supplier, externalNumber).joinToString(" · "),
+    warehouse = this,
 )
 
 private fun InventoryDocumentResponse.toDisplayDocument() = DisplayDocument(
@@ -2004,6 +2627,7 @@ private fun InventoryDocumentResponse.toDisplayDocument() = DisplayDocument(
     createdAtUtc = createdAtUtc,
     itemCount = totalItems,
     subtitle = if (changedItems > 0) "расхождений: $changedItems" else "",
+    inventory = this,
 )
 
 private fun parseHexColor(value: String): Color = runCatching {

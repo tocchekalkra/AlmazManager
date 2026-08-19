@@ -324,7 +324,12 @@ private fun MainShell(
             ) { padding ->
                 Box(Modifier.fillMaxSize().padding(padding)) {
                     when (currentScreen) {
-                        Screen.Dashboard -> DashboardScreen(api)
+                        Screen.Dashboard -> DashboardScreen(
+                            api = api,
+                            fullName = session.fullName,
+                            onOpenStock = { currentScreen = Screen.Stock },
+                            onOpenDocuments = { currentScreen = Screen.Documents },
+                        )
                         Screen.Stock -> StockScreen(api)
                         Screen.Receiving -> MovementScreen(api, "Receiving")
                         Screen.Issue -> MovementScreen(api, "Issue")

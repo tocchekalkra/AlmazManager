@@ -30,8 +30,8 @@ class SessionStore(context: Context) {
     }
 
     fun lastBaseUrl(): String =
-        preferences.getString("base_url", "http://10.0.2.2:5003/api")
-            ?: "http://10.0.2.2:5003/api"
+        preferences.getString("base_url", "http://10.0.2.2:8088/api")
+            ?: "http://10.0.2.2:8088/api"
 
     fun save(baseUrl: String, response: LoginResponse): UserSession {
         val session = UserSession(
