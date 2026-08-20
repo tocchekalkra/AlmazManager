@@ -100,8 +100,6 @@ public sealed class CreateInventoryDocumentHandler
                 GenerateNumber(),
                 command.Comment);
 
-        MaterialKind? inventoryKind = null;
-
         foreach (var item in command.Items)
         {
             if (item.ActualQuantity < 0)
@@ -127,15 +125,6 @@ public sealed class CreateInventoryDocumentHandler
                 throw new InvalidOperationException(
                     $"Материал '{material.Name}' находится в архиве.");
             }
-
-            if (inventoryKind.HasValue &&
-                inventoryKind.Value != material.Kind)
-            {
-                throw new InvalidOperationException(
-                    "Стандартные материалы и ORACAL должны инвентаризироваться отдельными документами.");
-            }
-
-            inventoryKind ??= material.Kind;
 
             if (material.Kind == MaterialKind.Standard &&
                 item.ActualQuantity != decimal.Truncate(item.ActualQuantity))

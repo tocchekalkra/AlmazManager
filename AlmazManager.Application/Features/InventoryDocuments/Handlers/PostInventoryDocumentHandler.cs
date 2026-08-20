@@ -93,7 +93,6 @@ public sealed class PostInventoryDocumentHandler
          * ничего не меняем,
          * только проверяем весь документ.
          */
-        MaterialKind? inventoryKind = null;
         var materialsById = new Dictionary<Guid, Material>();
 
         foreach (var item in document.Items)
@@ -115,14 +114,6 @@ public sealed class PostInventoryDocumentHandler
                     $"Материал '{material.Name}' находится в архиве.");
             }
 
-            if (inventoryKind.HasValue &&
-                inventoryKind.Value != material.Kind)
-            {
-                throw new InvalidOperationException(
-                    "Стандартные материалы и ORACAL должны инвентаризироваться отдельными документами.");
-            }
-
-            inventoryKind ??= material.Kind;
             materialsById[material.Id] = material;
 
             if (material.Kind == MaterialKind.Standard &&

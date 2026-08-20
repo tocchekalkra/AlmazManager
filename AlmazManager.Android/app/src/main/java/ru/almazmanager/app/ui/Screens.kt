@@ -1586,7 +1586,7 @@ fun InventoryScreen(api: ApiService, oracal: Boolean) {
             loading = true
             error = ""
             val loadedMaterials = api.loadAllMaterials().filter {
-                it.isActive && if (oracal) it.kind == "Oracal641" else it.kind != "Oracal641"
+                it.isActive && (!oracal || it.kind == "Oracal641")
             }
             materials = loadedMaterials
             categories = api.getCategories().filter { category ->
@@ -1644,7 +1644,8 @@ fun InventoryScreen(api: ApiService, oracal: Boolean) {
     ) {
         SectionHeader(
             if (oracal) "Инвентаризация ORACAL" else "Инвентаризация склада",
-            "Сначала нажмите на нужную ширину, затем используйте кнопки минус и плюс.",
+            if (oracal) "Подсчёт ORACAL с шагом 0,01 м."
+            else "Обычные материалы, краска и ORACAL можно считать в одном документе.",
             onRefresh = { counts.clear(); selectedMaterialId = null; refreshKey += 1 },
         )
 
@@ -1738,7 +1739,7 @@ fun InventoryScreen(api: ApiService, oracal: Boolean) {
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text(
-                                        "ШИРИНА",
+                                        if (widths.firstOrNull()?.kind == "Ink") "ЦВЕТ" else "ШИРИНА",
                                         modifier = Modifier.weight(1f),
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.Bold,
@@ -1792,7 +1793,7 @@ fun InventoryScreen(api: ApiService, oracal: Boolean) {
                                                 modifier = Modifier.weight(1f),
                                                 verticalAlignment = Alignment.CenterVertically,
                                             ) {
-                                                if (oracal && !material.colorHex.isNullOrBlank()) {
+                                                if ((material.kind == "Oracal641" || material.kind == "Ink") && !material.colorHex.isNullOrBlank()) {
                                                     Box(
                                                         Modifier.size(18.dp).background(
                                                             parseHexColor(material.colorHex),
@@ -1803,7 +1804,11 @@ fun InventoryScreen(api: ApiService, oracal: Boolean) {
                                                 }
                                                 Column {
                                                     Text(
-                                                        material.widthMeters?.let { "${numberFormat.format(it)} м" } ?: "—",
+                                                        if (material.kind == "Ink") {
+                                                            "${material.colorName ?: "Без цвета"} · ${numberFormat.format(material.packageLiters ?: 0.0)} л"
+                                                        } else {
+                                                            material.widthMeters?.let { "${numberFormat.format(it)} м" } ?: "—"
+                                                        },
                                                         style = MaterialTheme.typography.titleMedium,
                                                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                                                     )

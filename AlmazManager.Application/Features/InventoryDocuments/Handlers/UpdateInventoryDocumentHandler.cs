@@ -97,8 +97,6 @@ public sealed class UpdateInventoryDocumentHandler
                 .Select(x => x.MaterialId)
                 .ToList();
 
-        MaterialKind? inventoryKind = null;
-
         foreach (var materialId in existingToRemove)
         {
             document.RemoveItem(materialId);
@@ -128,15 +126,6 @@ public sealed class UpdateInventoryDocumentHandler
                 throw new InvalidOperationException(
                     $"Материал '{material.Name}' находится в архиве.");
             }
-
-            if (inventoryKind.HasValue &&
-                inventoryKind.Value != material.Kind)
-            {
-                throw new InvalidOperationException(
-                    "Стандартные материалы и ORACAL должны инвентаризироваться отдельными документами.");
-            }
-
-            inventoryKind ??= material.Kind;
 
             if (material.Kind == MaterialKind.Standard &&
                 requested.ActualQuantity != decimal.Truncate(requested.ActualQuantity))
