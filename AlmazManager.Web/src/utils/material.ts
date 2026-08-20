@@ -11,6 +11,8 @@ export type MaterialDisplaySource = {
     kind?: string | null;
     colorCode?: string | null;
     colorName?: string | null;
+    machineName?: string | null;
+    packageLiters?: number | null;
 };
 
 export function formatWidth(widthMeters?: number | null) {
@@ -35,6 +37,11 @@ export function materialDisplayName(material: MaterialDisplaySource) {
             : baseName;
 
         return width ? `${label} - ${width}` : label;
+    }
+
+    if (material.kind === 'Ink') {
+        const packageLabel = material.packageLiters ? ` · ${material.packageLiters} л` : '';
+        return `${material.machineName ?? 'Без станка'} · ${material.colorName ?? baseName}${packageLabel}`;
     }
 
     const filmMarkers = filmMarkerText(material.categoryName);

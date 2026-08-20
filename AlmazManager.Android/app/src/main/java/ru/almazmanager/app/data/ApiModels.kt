@@ -46,6 +46,21 @@ data class DashboardResponse(
     val recentOperations: List<DashboardRecentOperation> = emptyList(),
     val recentDocuments: List<DashboardRecentDocument> = emptyList(),
     val consumptionDays: List<DashboardConsumptionDay> = emptyList(),
+    val inkByMachine: List<DashboardInkMachine> = emptyList(),
+)
+
+data class DashboardInkMachine(
+    val machineName: String,
+    val totalLiters: Double,
+    val colors: List<DashboardInkColor> = emptyList(),
+)
+
+data class DashboardInkColor(
+    val colorName: String,
+    val colorHex: String = "#808080",
+    val quantityLiters: Double,
+    val minimumLiters: Double,
+    val belowMinimum: Boolean,
 )
 
 data class DashboardAttentionMaterial(
@@ -115,6 +130,8 @@ data class MaterialItem(
     val colorCode: String? = null,
     val colorName: String? = null,
     val colorHex: String? = null,
+    val machineName: String? = null,
+    val packageLiters: Double? = null,
 )
 
 data class CategoryItem(
@@ -146,6 +163,8 @@ data class StockItem(
     val colorCode: String? = null,
     val colorName: String? = null,
     val colorHex: String? = null,
+    val machineName: String? = null,
+    val packageLiters: Double? = null,
     val currentQuantity: Double,
     val expectedQuantity: Double = 0.0,
     val minimumQuantity: Double,

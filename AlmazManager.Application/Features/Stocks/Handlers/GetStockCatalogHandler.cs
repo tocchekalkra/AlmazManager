@@ -98,6 +98,8 @@ public sealed class GetStockCatalogHandler
                     material.ColorCode,
                     material.ColorName,
                     material.ColorHex,
+                    material.MachineName,
+                    material.PackageLiters,
                     currentQuantity,
                     expectedByMaterialId.GetValueOrDefault(material.Id),
                     material.MinimumQuantity,
@@ -136,6 +138,10 @@ public sealed class GetStockCatalogHandler
                     StringComparison.OrdinalIgnoreCase) ?? false)
                 ||
                 (item.ColorName?.Contains(
+                    search,
+                    StringComparison.OrdinalIgnoreCase) ?? false)
+                ||
+                (item.MachineName?.Contains(
                     search,
                     StringComparison.OrdinalIgnoreCase) ?? false)
                 ||

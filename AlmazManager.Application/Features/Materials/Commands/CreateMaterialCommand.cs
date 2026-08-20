@@ -10,4 +10,6 @@ public sealed record CreateMaterialCommand(
     decimal? WidthMeters,
     string? ColorCode,
     string? ColorName,
-    string? ColorHex);
+    string? ColorHex,
+    string? MachineName,
+    decimal? PackageLiters);

@@ -290,6 +290,45 @@ fun DashboardScreen(
             }
         }
 
+        if (dashboard.inkByMachine.isNotEmpty()) {
+            DashboardPanel(
+                title = "Остатки краски",
+                subtitle = "По станкам и цветам · литры",
+                icon = Icons.Default.BarChart,
+                actionLabel = "Открыть склад",
+                onAction = onOpenStock,
+            ) {
+                dashboard.inkByMachine.forEachIndexed { machineIndex, machine ->
+                    if (machineIndex > 0) HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(machine.machineName, Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                        Text("${numberFormat.format(machine.totalLiters)} л", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    }
+                    Spacer(Modifier.height(7.dp))
+                    machine.colors.forEach { color ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(
+                                Modifier.size(16.dp).background(
+                                    parseHexColor(color.colorHex),
+                                    RoundedCornerShape(5.dp),
+                                ),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(color.colorName, Modifier.weight(1f))
+                            Text(
+                                "${numberFormat.format(color.quantityLiters)} л",
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (color.belowMinimum) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         DashboardPanel(
             title = "Требуют внимания",
             subtitle = "Три наиболее критичные позиции",
@@ -652,7 +691,11 @@ fun StockScreen(api: ApiService) {
                                         ) {
                                             Column(Modifier.weight(1f)) {
                                                 Text(
-                                                    stock.widthMeters?.let { "${numberFormat.format(it)} м" } ?: "Без ширины",
+                                                    if (stock.kind == "Ink") {
+                                                        "${stock.colorName ?: "Без цвета"} · ${numberFormat.format(stock.packageLiters ?: 0.0)} л"
+                                                    } else {
+                                                        stock.widthMeters?.let { "${numberFormat.format(it)} м" } ?: "Без ширины"
+                                                    },
                                                     fontWeight = FontWeight.SemiBold,
                                                 )
                                                 Text(
@@ -969,13 +1012,17 @@ fun MovementScreen(api: ApiService, type: String) {
                         error = "Количество должно быть больше нуля."
                         return@Button
                     }
-                    if (material.kind != "Oracal641" && amount % 1.0 != 0.0) {
+                    if (material.kind == "Standard" && amount % 1.0 != 0.0) {
                         error = "Стандартные материалы учитываются целыми штуками."
                         return@Button
                     }
                     val normalizedAmount = roundToStep(
                         amount,
-                        if (material.kind == "Oracal641") 0.01 else 1.0,
+                        when (material.kind) {
+                            "Oracal641" -> 0.01
+                            "Ink" -> 0.1
+                            else -> 1.0
+                        },
                     )
                     if (!receiving && normalizedAmount > material.currentQuantity) {
                         error = "Нельзя списать больше текущего остатка."
@@ -1313,7 +1360,10 @@ fun SuppliesScreen(api: ApiService) {
                                 } else if (value % 1.0 != 0.0) {
                                     error = "Количество обычного материала должно быть целым."
                                 } else {
-                                    lines += SupplyDraftLine(material, roundToStep(value, 1.0))
+                                    lines += SupplyDraftLine(
+                                        material,
+                                        roundToStep(value, if (material.kind == "Ink") 0.1 else 1.0),
+                                    )
                                     selectedMaterialName = ""
                                     selectedMaterialId = ""
                                     quantity = "1"
@@ -1733,7 +1783,11 @@ fun InventoryScreen(api: ApiService, oracal: Boolean) {
                                     val selected = selectedMaterialId == material.id
                                     val actual = parseNumber(counts[material.id].orEmpty())
                                     val displayActual = actual ?: 0.0
-                                    val quantityStep = if (oracal) 0.01 else 1.0
+                                    val quantityStep = when (material.kind) {
+                                        "Oracal641" -> 0.01
+                                        "Ink" -> 0.1
+                                        else -> 1.0
+                                    }
 
                                     Column(
                                         modifier = Modifier
@@ -1870,7 +1924,7 @@ fun InventoryScreen(api: ApiService, oracal: Boolean) {
                         return@Button
                     }
 
-                    if (!oracal && actual % 1.0 != 0.0) {
+                    if (material.kind == "Standard" && actual % 1.0 != 0.0) {
                         error = "Стандартные материалы учитываются целыми штуками."
                         return@Button
                     }
@@ -2399,6 +2453,10 @@ private fun SuccessBlock(message: String) {
 }
 
 private fun materialDisplayName(material: MaterialItem): String {
+    if (material.kind == "Ink") {
+        val pack = material.packageLiters?.let { " · ${numberFormat.format(it)} л" }.orEmpty()
+        return "${material.machineName ?: "Без станка"} · ${material.colorName ?: material.name}$pack"
+    }
     val width = material.widthMeters?.let { "${numberFormat.format(it)} м" }
     val baseName = if (width == null) material.name else material.name
         .replace(Regex("\\s+-?\\s*\\d+(?:[.,]\\d+)?\\s*м\\s*$", RegexOption.IGNORE_CASE), "")
@@ -2419,6 +2477,10 @@ private fun materialDisplayName(material: MaterialItem): String {
 }
 
 private fun stockDisplayName(material: StockItem): String {
+    if (material.kind == "Ink") {
+        val pack = material.packageLiters?.let { " · ${numberFormat.format(it)} л" }.orEmpty()
+        return "${material.machineName ?: "Без станка"} · ${material.colorName ?: material.materialName}$pack"
+    }
     val width = material.widthMeters?.let { "${numberFormat.format(it)} м" }
     val baseName = if (width == null) material.materialName else material.materialName
         .replace(Regex("\\s+-?\\s*\\d+(?:[.,]\\d+)?\\s*м\\s*$", RegexOption.IGNORE_CASE), "")
@@ -2443,6 +2505,10 @@ private fun stockBaseName(material: StockItem): String {
         return listOfNotNull(material.colorCode, material.colorName)
             .joinToString(" ")
             .ifBlank { "ORACAL 641" }
+    }
+
+    if (material.kind == "Ink") {
+        return material.machineName ?: "Краска"
     }
 
     return material.materialName

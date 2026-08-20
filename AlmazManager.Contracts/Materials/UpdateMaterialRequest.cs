@@ -10,4 +10,6 @@ public sealed record UpdateMaterialRequest(
     decimal? WidthMeters = null,
     string? ColorCode = null,
     string? ColorName = null,
-    string? ColorHex = null);
+    string? ColorHex = null,
+    string? MachineName = null,
+    decimal? PackageLiters = null);

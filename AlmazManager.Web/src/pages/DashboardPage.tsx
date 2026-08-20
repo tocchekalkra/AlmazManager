@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowDownToLine, ArrowUpFromLine, BarChart3, Boxes, CalendarClock, FileText, PackageCheck } from 'lucide-react';
+import { AlertTriangle, ArrowDownToLine, ArrowUpFromLine, BarChart3, Boxes, CalendarClock, Droplets, FileText, PackageCheck } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -9,10 +9,11 @@ import { filmMarkerText } from '../utils/material';
 type AttentionMaterial = { materialId: string; name: string; article: string; category: string; quantity: number; minimumQuantity: number; unit: string; status: string };
 type RecentDocument = { documentId: string; number: string; type: string; createdAtUtc: string; postedAtUtc?: string | null; userFullName: string; recipient?: string | null; itemCount: number; summary: string };
 type ConsumptionDay = { date: string; documentCount: number; itemCount: number; topMaterial?: string | null };
+type InkMachine = { machineName: string; totalLiters: number; colors: { colorName: string; colorHex: string; quantityLiters: number; minimumLiters: number; belowMinimum: boolean }[] };
 type DashboardResponse = {
     totalMaterials: number; activeMaterials: number; belowMinimumCount: number;
     receivingToday: number; issueToday: number; issueYesterday: number;
-    attentionMaterials: AttentionMaterial[]; recentDocuments: RecentDocument[]; consumptionDays: ConsumptionDay[];
+    attentionMaterials: AttentionMaterial[]; recentDocuments: RecentDocument[]; consumptionDays: ConsumptionDay[]; inkByMachine: InkMachine[];
 };
 
 const number = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 3 });
@@ -55,6 +56,28 @@ export default function DashboardPage() {
                     {(dashboard?.consumptionDays ?? []).map((day) => <div key={day.date} title={`${day.documentCount} документов · ${day.itemCount} позиций${day.topMaterial ? ` · чаще: ${day.topMaterial}` : ''}`}><span style={{ height: `${Math.max(5, day.itemCount / maxActivity * 100)}%` }}><i>{day.itemCount}</i></span><small>{new Date(`${day.date}T00:00:00`).toLocaleDateString('ru-RU', { weekday: 'short', day: '2-digit' })}</small></div>)}
                 </div>
             </section>
+
+            {(dashboard?.inkByMachine?.length ?? 0) > 0 && (
+                <section className="panel">
+                    <div className="panel-header"><div><h2><Droplets size={17} /> Остатки краски</h2><p>Отдельно по каждому станку · литры</p></div><button className="text-button" type="button" onClick={() => navigate('/stock')}>Открыть склад</button></div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
+                        {(dashboard?.inkByMachine ?? []).map((machine) => (
+                            <article key={machine.machineName} style={{ border: '1px solid var(--border)', borderRadius: 14, padding: 14, background: 'var(--surface-soft)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}><strong>{machine.machineName}</strong><strong>{number.format(machine.totalLiters)} л</strong></div>
+                                <div style={{ display: 'grid', gap: 7 }}>
+                                    {machine.colors.map((color) => (
+                                        <div key={color.colorName} style={{ display: 'grid', gridTemplateColumns: '18px 1fr auto', alignItems: 'center', gap: 8 }}>
+                                            <span style={{ width: 16, height: 16, borderRadius: 5, background: color.colorHex, border: '1px solid rgba(127,127,127,.35)' }} />
+                                            <span>{color.colorName}</span>
+                                            <strong style={{ color: color.belowMinimum ? 'var(--danger)' : undefined }}>{number.format(color.quantityLiters)} л</strong>
+                                        </div>
+                                    ))}
+                                </div>
+                            </article>
+                        ))}
+                    </div>
+                </section>
+            )}
 
             <div className="dashboard-two-columns">
                 <section className="panel"><div className="panel-header"><div><h2>Требуют внимания</h2><p>Три наиболее критичные позиции</p></div><button className="text-button" type="button" onClick={() => navigate('/stock?belowMinimum=true')}>Показать все</button></div><div className="table-wrapper"><table className="data-table"><thead><tr><th>Материал</th><th>Остаток</th><th>Минимум</th><th>Статус</th></tr></thead><tbody>{(dashboard?.attentionMaterials ?? []).slice(0, 3).map((item) => <tr key={item.materialId} onClick={() => navigate(`/stock?material=${item.materialId}`)} className="clickable-row"><td className="primary-cell">{item.name}{filmMarkerText(item.category) ? ` · ${filmMarkerText(item.category)}` : ''}<small className="table-subtitle">{item.article} · {item.category}</small></td><td>{number.format(item.quantity)} {unitLabel(item.unit)}</td><td>{number.format(item.minimumQuantity)} {unitLabel(item.unit)}</td><td><span className={item.quantity <= 0 ? 'status status-danger' : 'status status-warning'}><i className="status-dot" />{item.quantity <= 0 ? 'Нет в наличии' : 'Низкий остаток'}</span></td></tr>)}</tbody></table></div>{!loading && (dashboard?.attentionMaterials.length ?? 0) === 0 && <div className="empty-state"><PackageCheck size={24} />Все остатки в норме</div>}</section>

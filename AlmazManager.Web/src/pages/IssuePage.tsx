@@ -652,8 +652,7 @@ export default function IssuePage() {
         }
 
         if (
-            selectedMaterial.kind !==
-            'Oracal641' &&
+            selectedMaterial.kind === 'Standard' &&
             !Number.isInteger(
                 parsedQuantity,
             )
@@ -667,6 +666,8 @@ export default function IssuePage() {
 
         if (selectedMaterial.kind === 'Oracal641') {
             parsedQuantity = Math.round(parsedQuantity * 100) / 100;
+        } else if (selectedMaterial.kind === 'Ink') {
+            parsedQuantity = Math.round(parsedQuantity * 10) / 10;
         }
 
         const alreadyAdded =
@@ -806,24 +807,22 @@ export default function IssuePage() {
             nextQuantity;
 
         if (
-            line.kind !==
-            'Oracal641'
+            line.kind === 'Standard'
         ) {
             normalized =
                 Math.round(
                     normalized,
                 );
-        } else {
+        } else if (line.kind === 'Oracal641') {
             normalized =
                 Math.round(normalized * 100) / 100;
+        } else {
+            normalized = Math.round(normalized * 10) / 10;
         }
 
         normalized =
             Math.max(
-                line.kind ===
-                    'Oracal641'
-                    ? 0.01
-                    : 1,
+                line.kind === 'Oracal641' ? 0.01 : line.kind === 'Ink' ? 0.1 : 1,
                 normalized,
             );
 
@@ -1868,19 +1867,13 @@ export default function IssuePage() {
                                                     <input
                                                         type="number"
                                                         min={
-                                                            line.kind ===
-                                                                'Oracal641'
-                                                                ? '0.01'
-                                                                : '1'
+                                                            line.kind === 'Oracal641' ? '0.01' : line.kind === 'Ink' ? '0.1' : '1'
                                                         }
                                                         max={
                                                             line.currentQuantity
                                                         }
                                                         step={
-                                                            line.kind ===
-                                                                'Oracal641'
-                                                                ? '0.01'
-                                                                : '1'
+                                                            line.kind === 'Oracal641' ? '0.01' : line.kind === 'Ink' ? '0.1' : '1'
                                                         }
                                                         value={
                                                             line.quantity

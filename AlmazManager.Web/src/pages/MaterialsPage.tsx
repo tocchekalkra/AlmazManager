@@ -13,6 +13,7 @@ import {
     ChevronDown,
     ChevronRight,
     Edit3,
+    Droplets,
     GripVertical,
     Lock,
     Package,
@@ -51,6 +52,8 @@ type MaterialCatalogItem = {
     colorCode?: string | null;
     colorName?: string | null;
     colorHex?: string | null;
+    machineName?: string | null;
+    packageLiters?: number | null;
 };
 
 type Category = {
@@ -62,7 +65,7 @@ type Category = {
 type MaterialForm = {
     id?: string;
 
-    kind: 'Standard' | 'Oracal641';
+    kind: 'Standard' | 'Oracal641' | 'Ink';
 
     name: string;
     article: string;
@@ -80,6 +83,8 @@ type MaterialForm = {
     colorCode: string;
     colorName: string;
     colorHex: string;
+    machineName: string;
+    packageLiters: '1' | '5';
 
     isActive: boolean;
 };
@@ -295,6 +300,8 @@ const emptyForm: MaterialForm = {
     colorCode: '',
     colorName: '',
     colorHex: '',
+    machineName: 'Широкоформатный',
+    packageLiters: '1',
 
     isActive: true,
 };
@@ -306,6 +313,16 @@ const numberFormatter =
             maximumFractionDigits: 2,
         },
     );
+
+const inkColors = [
+    { name: 'Cyan', hex: '#00AEEF' },
+    { name: 'Magenta', hex: '#EC008C' },
+    { name: 'Yellow', hex: '#FFF200' },
+    { name: 'Black', hex: '#111111' },
+    { name: 'White', hex: '#F4F4F4' },
+];
+
+const defaultMachines = ['Широкоформатный', 'Интерьерный', 'Рулонный УФ'];
 
 export default function MaterialsPage() {
     const { user } = useAuth();
@@ -566,8 +583,7 @@ export default function MaterialsPage() {
             () =>
                 filteredMaterials.filter(
                     (material) =>
-                        material.kind !==
-                        'Oracal641',
+                        material.kind === 'Standard',
                 ),
             [filteredMaterials],
         );
@@ -690,6 +706,17 @@ export default function MaterialsPage() {
                 ),
             [filteredMaterials],
         );
+
+    const inkMaterials = useMemo(
+        () => filteredMaterials
+            .filter((material) => material.kind === 'Ink')
+            .slice()
+            .sort((a, b) =>
+                (a.machineName ?? '').localeCompare(b.machineName ?? '', 'ru') ||
+                (a.colorName ?? '').localeCompare(b.colorName ?? '', 'en') ||
+                Number(a.packageLiters ?? 0) - Number(b.packageLiters ?? 0)),
+        [filteredMaterials],
+    );
 
     const oracalRows =
         useMemo(() => {
@@ -1112,6 +1139,29 @@ export default function MaterialsPage() {
         setFormOpen(true);
     }
 
+    function openCreateInk() {
+        const inkCategory = categories.find((category) =>
+            category.isActive && category.name.toLowerCase() === 'краска') ??
+            categories.find((category) => category.isActive);
+        const firstColor = inkColors[0];
+
+        setForm({
+            ...emptyForm,
+            kind: 'Ink',
+            categoryId: inkCategory?.id ?? '',
+            name: `Краска ${firstColor.name}`,
+            colorCode: firstColor.name,
+            colorName: firstColor.name,
+            colorHex: firstColor.hex,
+            machineName: defaultMachines[0],
+            packageLiters: '1',
+        });
+        setSelectedWidths([]);
+        setCustomWidth('');
+        setError('');
+        setFormOpen(true);
+    }
+
     function openEdit(
         material: MaterialCatalogItem,
     ) {
@@ -1126,7 +1176,9 @@ export default function MaterialsPage() {
                 material.kind ===
                     'Oracal641'
                     ? 'Oracal641'
-                    : 'Standard',
+                    : material.kind === 'Ink'
+                        ? 'Ink'
+                        : 'Standard',
 
             name:
                 material.name,
@@ -1168,6 +1220,9 @@ export default function MaterialsPage() {
             colorHex:
                 material.colorHex ??
                 '',
+
+            machineName: material.machineName ?? 'Широкоформатный',
+            packageLiters: material.packageLiters === 5 ? '5' : '1',
 
             isActive:
                 material.isActive,
@@ -1293,7 +1348,27 @@ export default function MaterialsPage() {
                     return;
                 }
 
-                if (
+                if (form.kind === 'Ink') {
+                    if (!form.machineName.trim()) {
+                        setError('Укажите станок.');
+                        return;
+                    }
+
+                    await api.put(`/materials/${form.id}`, {
+                        name: `Краска ${form.colorName}`,
+                        article: form.article.trim() || `INK-${slug(form.machineName)}-${form.colorName.toUpperCase()}-${form.packageLiters}L`,
+                        categoryId: form.categoryId,
+                        unit: 'Liter',
+                        minimumQuantity,
+                        kind: 'Ink',
+                        widthMeters: null,
+                        colorCode: form.colorName,
+                        colorName: form.colorName,
+                        colorHex: form.colorHex,
+                        machineName: form.machineName.trim(),
+                        packageLiters: Number(form.packageLiters),
+                    });
+                } else if (
                     form.kind ===
                     'Oracal641'
                 ) {
@@ -1404,6 +1479,29 @@ export default function MaterialsPage() {
             /*
              * СОЗДАНИЕ ORACAL
              */
+            else if (form.kind === 'Ink') {
+                if (!form.machineName.trim()) {
+                    setError('Укажите станок.');
+                    return;
+                }
+
+                await api.post('/materials', {
+                    name: `Краска ${form.colorName}`,
+                    article: `INK-${slug(form.machineName)}-${form.colorName.toUpperCase()}-${form.packageLiters}L`,
+                    categoryId: form.categoryId,
+                    unit: 'Liter',
+                    minimumQuantity,
+                    kind: 'Ink',
+                    widthMeters: null,
+                    colorCode: form.colorName,
+                    colorName: form.colorName,
+                    colorHex: form.colorHex,
+                    machineName: form.machineName.trim(),
+                    packageLiters: Number(form.packageLiters),
+                });
+            }
+
+            /* СОЗДАНИЕ ORACAL */
             else if (
                 form.kind ===
                 'Oracal641'
@@ -1642,7 +1740,7 @@ export default function MaterialsPage() {
 
                     <p>
                         Обычные материалы учитываются в штуках.
-                        ORACAL 641 — в погонных метрах.
+                        ORACAL 641 — в погонных метрах, краска — в литрах.
                     </p>
                 </div>
 
@@ -1652,6 +1750,15 @@ export default function MaterialsPage() {
                             styles.headingActions
                         }
                     >
+                        <button
+                            type="button"
+                            className="button secondary"
+                            onClick={openCreateInk}
+                        >
+                            <Droplets size={17} />
+                            Добавить краску
+                        </button>
+
                         <button
                             type="button"
                             className="button secondary"
@@ -1858,6 +1965,38 @@ export default function MaterialsPage() {
 
                         Обновить
                     </button>
+                </div>
+            </section>
+
+            <section className="panel" style={{ marginTop: 18 }}>
+                <div style={styles.sectionHeader}>
+                    <div>
+                        <p className="eyebrow">INK</p>
+                        <h2>Краска</h2>
+                        <p style={styles.sectionSubtitle}>Остатки по станкам, цветам и фасовке 1 / 5 л.</p>
+                    </div>
+                    {access.canManageMaterials && (
+                        <button type="button" className="button primary" onClick={openCreateInk}>
+                            <Plus size={17} /> Добавить краску
+                        </button>
+                    )}
+                </div>
+                <div className="table-wrapper">
+                    <table className="data-table">
+                        <thead><tr><th>Станок</th><th>Цвет</th><th>Фасовка</th><th>Остаток</th><th>Минимум</th></tr></thead>
+                        <tbody>
+                            {inkMaterials.map((material) => (
+                                <tr key={material.id} className={access.canManageMaterials ? 'clickable-row' : undefined} onClick={() => access.canManageMaterials && openEdit(material)}>
+                                    <td className="primary-cell">{material.machineName || 'Без станка'}<small className="table-subtitle">{material.article}</small></td>
+                                    <td><span style={{ ...styles.colorSwatch, display: 'inline-block', marginRight: 8, background: material.colorHex || '#808080' }} />{material.colorName}</td>
+                                    <td>{numberFormatter.format(material.packageLiters ?? 0)} л</td>
+                                    <td><strong>{numberFormatter.format(material.currentQuantity)} л</strong></td>
+                                    <td>{numberFormatter.format(material.minimumQuantity)} л</td>
+                                </tr>
+                            ))}
+                            {!loading && inkMaterials.length === 0 && <tr><td colSpan={5}>Краска пока не добавлена.</td></tr>}
+                        </tbody>
+                    </table>
                 </div>
             </section>
 
@@ -2299,6 +2438,32 @@ export default function MaterialsPage() {
 
                                     ORACAL 641
                                 </button>
+
+                                <button
+                                    type="button"
+                                    style={{
+                                        ...styles.kindButton,
+                                        ...(form.kind === 'Ink' ? styles.kindButtonActive : {}),
+                                    }}
+                                    onClick={() => {
+                                        const first = inkColors[0];
+                                        const inkCategory = categories.find((category) =>
+                                            category.isActive && category.name.toLowerCase() === 'краска');
+                                        setForm((current) => ({
+                                            ...current,
+                                            kind: 'Ink',
+                                            categoryId: inkCategory?.id ?? current.categoryId,
+                                            colorCode: first.name,
+                                            colorName: first.name,
+                                            colorHex: first.hex,
+                                            machineName: defaultMachines[0],
+                                            packageLiters: '1',
+                                        }));
+                                    }}
+                                >
+                                    <Droplets size={18} />
+                                    Краска
+                                </button>
                             </div>
                         )}
 
@@ -2737,6 +2902,52 @@ export default function MaterialsPage() {
                                         </>
                                     )}
                                 </>
+                            ) : form.kind === 'Ink' ? (
+                                <>
+                                    <label style={styles.field}>
+                                        <span>Станок</span>
+                                        <input
+                                            list="ink-machine-options"
+                                            value={form.machineName}
+                                            onChange={(event) => setForm((current) => ({ ...current, machineName: event.target.value }))}
+                                            placeholder="Название станка"
+                                            style={styles.input}
+                                        />
+                                        <datalist id="ink-machine-options">
+                                            {defaultMachines.map((machine) => <option key={machine} value={machine} />)}
+                                        </datalist>
+                                        <small style={styles.helper}>Можно ввести новое название станка.</small>
+                                    </label>
+
+                                    <label style={styles.field}>
+                                        <span>Цвет</span>
+                                        <select
+                                            value={form.colorName}
+                                            onChange={(event) => {
+                                                const selected = inkColors.find((color) => color.name === event.target.value) ?? inkColors[0];
+                                                setForm((current) => ({ ...current, colorCode: selected.name, colorName: selected.name, colorHex: selected.hex }));
+                                            }}
+                                            style={styles.input}
+                                        >
+                                            {inkColors.map((color) => <option key={color.name} value={color.name}>{color.name}</option>)}
+                                        </select>
+                                    </label>
+
+                                    <label style={styles.field}>
+                                        <span>Фасовка</span>
+                                        <select value={form.packageLiters} onChange={(event) => setForm((current) => ({ ...current, packageLiters: event.target.value as '1' | '5' }))} style={styles.input}>
+                                            <option value="1">1 л</option>
+                                            <option value="5">5 л</option>
+                                        </select>
+                                    </label>
+
+                                    {editing && (
+                                        <label style={styles.field}>
+                                            <span>Артикул</span>
+                                            <input value={form.article} onChange={(event) => setForm((current) => ({ ...current, article: event.target.value }))} style={styles.input} />
+                                        </label>
+                                    )}
+                                </>
                             ) : (
                                 <>
                                     <label
@@ -2868,10 +3079,11 @@ export default function MaterialsPage() {
                                     type="number"
                                     min="0"
                                     step={
-                                        form.kind ===
-                                            'Oracal641'
-                                            ? '0.01'
-                                            : '1'
+                                        form.kind === 'Standard'
+                                            ? '1'
+                                            : form.kind === 'Ink'
+                                                ? '0.1'
+                                                : '0.01'
                                     }
                                     value={
                                         form.minimumQuantity
@@ -3246,6 +3458,14 @@ function formatWidth(
                 2,
         },
     )} м`;
+}
+
+function slug(value: string) {
+    return value
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-ZА-ЯЁ0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
 }
 
 const styles: Record<

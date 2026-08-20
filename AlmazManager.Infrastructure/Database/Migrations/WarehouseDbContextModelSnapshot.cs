@@ -206,6 +206,10 @@ namespace AlmazManager.Infrastructure.Database.Migrations
                     b.Property<int>("Kind")
                         .HasColumnType("integer");
 
+                    b.Property<string>("MachineName")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
                     b.Property<decimal>("MinimumQuantity")
                         .HasPrecision(18, 3)
                         .HasColumnType("numeric(18,3)");
@@ -214,6 +218,10 @@ namespace AlmazManager.Infrastructure.Database.Migrations
                         .IsRequired()
                         .HasMaxLength(250)
                         .HasColumnType("character varying(250)");
+
+                    b.Property<decimal?>("PackageLiters")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
 
                     b.Property<int>("Unit")
                         .HasColumnType("integer");
@@ -230,6 +238,8 @@ namespace AlmazManager.Infrastructure.Database.Migrations
                     b.HasIndex("CategoryId");
 
                     b.HasIndex("Kind");
+
+                    b.HasIndex("Kind", "MachineName", "ColorName", "PackageLiters");
 
                     b.HasIndex("Name");
 

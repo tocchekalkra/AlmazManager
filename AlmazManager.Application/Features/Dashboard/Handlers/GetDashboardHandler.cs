@@ -288,6 +288,40 @@ public sealed class GetDashboardHandler
             today.AddDays(-6),
             today);
 
+        var inkByMachine = activeMaterials
+            .Where(material =>
+                material.Kind == MaterialKind.Ink &&
+                !string.IsNullOrWhiteSpace(material.MachineName))
+            .GroupBy(material => material.MachineName!.Trim())
+            .OrderBy(group => group.Key)
+            .Select(machine =>
+            {
+                var colors = machine
+                    .GroupBy(material => material.ColorName ?? "Без цвета")
+                    .Select(color =>
+                    {
+                        var quantity = color.Sum(material =>
+                            stockByMaterialId.GetValueOrDefault(material.Id, 0));
+                        var minimum = color.Sum(material => material.MinimumQuantity);
+                        var first = color.First();
+
+                        return new DashboardInkColorResponse(
+                            color.Key,
+                            first.ColorHex ?? "#808080",
+                            quantity,
+                            minimum,
+                            quantity < minimum);
+                    })
+                    .OrderBy(color => InkColorOrder(color.ColorName))
+                    .ToList();
+
+                return new DashboardInkMachineResponse(
+                    machine.Key,
+                    colors.Sum(color => color.QuantityLiters),
+                    colors);
+            })
+            .ToList();
+
         return new DashboardResponse(
             materials.Count,
             activeMaterials.Count,
@@ -306,7 +340,8 @@ public sealed class GetDashboardHandler
             attentionMaterials,
             recentOperations,
             recentDocuments,
-            consumptionDays);
+            consumptionDays,
+            inkByMachine);
     }
 
     public async Task<ConsumptionStatisticsResponse> GetConsumptionAsync(
@@ -455,4 +490,14 @@ public sealed class GetDashboardHandler
             _ => string.Empty
         };
     }
+
+    private static int InkColorOrder(string colorName) => colorName switch
+    {
+        "Cyan" => 1,
+        "Magenta" => 2,
+        "Yellow" => 3,
+        "Black" => 4,
+        "White" => 5,
+        _ => 99
+    };
 }

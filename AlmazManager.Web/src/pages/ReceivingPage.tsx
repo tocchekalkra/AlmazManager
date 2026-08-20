@@ -627,11 +627,12 @@ export default function ReceivingPage() {
 
         if (selectedMaterial.kind === 'Oracal641') {
             parsedQuantity = Math.round(parsedQuantity * 100) / 100;
+        } else if (selectedMaterial.kind === 'Ink') {
+            parsedQuantity = Math.round(parsedQuantity * 10) / 10;
         }
 
         if (
-            selectedMaterial.kind !==
-            'Oracal641' &&
+            selectedMaterial.kind === 'Standard' &&
             !Number.isInteger(
                 parsedQuantity,
             )
@@ -768,7 +769,9 @@ export default function ReceivingPage() {
                                     quantity:
                                         line.kind === 'Oracal641'
                                             ? Math.round(parsed * 100) / 100
-                                            : Math.round(parsed),
+                                            : line.kind === 'Ink'
+                                                ? Math.round(parsed * 10) / 10
+                                                : Math.round(parsed),
                                 }
                             : line,
                 ),
@@ -802,8 +805,7 @@ export default function ReceivingPage() {
             }
 
             if (
-                line.kind !==
-                'Oracal641' &&
+                line.kind === 'Standard' &&
                 !Number.isInteger(
                     line.quantity,
                 )
@@ -1684,10 +1686,9 @@ export default function ReceivingPage() {
                                                     type="number"
                                                     min="0"
                                                     step={
-                                                        line.kind ===
-                                                            'Oracal641'
+                                                        line.kind === 'Oracal641'
                                                             ? '0.01'
-                                                            : '1'
+                                                            : line.kind === 'Ink' ? '0.1' : '1'
                                                     }
                                                     value={
                                                         line.quantity

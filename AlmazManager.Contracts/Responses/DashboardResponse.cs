@@ -18,7 +18,20 @@ public sealed record DashboardResponse(
     IReadOnlyList<DashboardAttentionMaterialResponse>? AttentionMaterials = null,
     IReadOnlyList<DashboardRecentOperationResponse>? RecentOperations = null,
     IReadOnlyList<DashboardRecentDocumentResponse>? RecentDocuments = null,
-    IReadOnlyList<DashboardConsumptionDayResponse>? ConsumptionDays = null);
+    IReadOnlyList<DashboardConsumptionDayResponse>? ConsumptionDays = null,
+    IReadOnlyList<DashboardInkMachineResponse>? InkByMachine = null);
+
+public sealed record DashboardInkMachineResponse(
+    string MachineName,
+    decimal TotalLiters,
+    IReadOnlyList<DashboardInkColorResponse> Colors);
+
+public sealed record DashboardInkColorResponse(
+    string ColorName,
+    string ColorHex,
+    decimal QuantityLiters,
+    decimal MinimumLiters,
+    bool BelowMinimum);
 
 public sealed record DashboardAttentionMaterialResponse(
     Guid MaterialId,

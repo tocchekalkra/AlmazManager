@@ -340,17 +340,10 @@ export default function InventoryPage() {
                             return row;
                         }
 
-                        const next =
-                            Math.max(
-                                0,
-                                Math.round(
-                                    Number.isFinite(
-                                        value,
-                                    )
-                                        ? value
-                                        : 0,
-                                ),
-                            );
+                        const raw = Number.isFinite(value) ? value : 0;
+                        const next = Math.max(0, row.kind === 'Ink'
+                            ? Math.round(raw * 10) / 10
+                            : Math.round(raw));
 
                         return {
                             ...row,
@@ -381,8 +374,7 @@ export default function InventoryPage() {
 
         changeActualQuantity(
             materialId,
-            row.actualQuantity +
-            delta,
+            row.actualQuantity + (row.kind === 'Ink' ? delta / 10 : delta),
         );
     }
 
@@ -886,7 +878,7 @@ export default function InventoryPage() {
                                                     <input
                                                         type="number"
                                                         min="0"
-                                                        step="1"
+                                                        step={row.kind === 'Ink' ? '0.1' : '1'}
                                                         value={
                                                             row.actualQuantity
                                                         }

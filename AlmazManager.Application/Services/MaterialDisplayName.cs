@@ -31,6 +31,14 @@ internal static class MaterialDisplayName
             }
         }
 
+        if (material.Kind == MaterialKind.Ink)
+        {
+            var package = material.PackageLiters.HasValue
+                ? $" · {material.PackageLiters.Value:0.##} л"
+                : string.Empty;
+            return $"{material.MachineName} · {material.ColorName}{package}";
+        }
+
         if (!material.WidthMeters.HasValue)
         {
             return name;

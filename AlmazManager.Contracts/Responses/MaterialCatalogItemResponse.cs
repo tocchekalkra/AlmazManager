@@ -16,4 +16,6 @@ public sealed record MaterialCatalogItemResponse(
     decimal? WidthMeters,
     string? ColorCode,
     string? ColorName,
-    string? ColorHex);
+    string? ColorHex,
+    string? MachineName,
+    decimal? PackageLiters);

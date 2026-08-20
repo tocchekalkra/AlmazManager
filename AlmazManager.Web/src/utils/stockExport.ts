@@ -12,6 +12,8 @@ export type ExportStockItem = {
     colorCode?: string | null;
     colorName?: string | null;
     colorHex?: string | null;
+    machineName?: string | null;
+    packageLiters?: number | null;
     currentQuantity: number;
     expectedQuantity: number;
     minimumQuantity: number;

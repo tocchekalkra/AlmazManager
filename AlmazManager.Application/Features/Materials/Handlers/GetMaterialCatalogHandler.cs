@@ -144,7 +144,9 @@ public sealed class GetMaterialCatalogHandler
                         material.WidthMeters,
                         material.ColorCode,
                         material.ColorName,
-                        material.ColorHex);
+                        material.ColorHex,
+                        material.MachineName,
+                        material.PackageLiters);
                 })
                 .AsEnumerable();
 
@@ -173,6 +175,13 @@ public sealed class GetMaterialCatalogHandler
                     ||
                     (
                         item.ColorName?.Contains(
+                            search,
+                            StringComparison.OrdinalIgnoreCase)
+                        ?? false
+                    )
+                    ||
+                    (
+                        item.MachineName?.Contains(
                             search,
                             StringComparison.OrdinalIgnoreCase)
                         ?? false

@@ -81,7 +81,9 @@ public sealed class MaterialsController : ControllerBase
                 request.WidthMeters,
                 request.ColorCode,
                 request.ColorName,
-                request.ColorHex);
+                request.ColorHex,
+                request.MachineName,
+                request.PackageLiters);
 
         var response =
             await _createMaterialHandler
@@ -185,7 +187,9 @@ public sealed class MaterialsController : ControllerBase
                 request.WidthMeters,
                 request.ColorCode,
                 request.ColorName,
-                request.ColorHex);
+                request.ColorHex,
+                request.MachineName,
+                request.PackageLiters);
 
         var response =
             await _updateMaterialHandler

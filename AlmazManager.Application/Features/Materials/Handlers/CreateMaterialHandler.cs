@@ -127,6 +127,14 @@ public sealed class CreateMaterialHandler
                 command.ColorHex ??
                 string.Empty);
         }
+        else if (kind == MaterialKind.Ink)
+        {
+            material.ConfigureInk(
+                command.MachineName ?? string.Empty,
+                command.ColorName ?? command.ColorCode ?? string.Empty,
+                command.PackageLiters ?? 0,
+                command.ColorHex);
+        }
         else
         {
             material.ConfigureStandard(

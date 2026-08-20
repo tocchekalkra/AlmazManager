@@ -26,6 +26,8 @@ type Material = {
   widthMeters?: number | null;
   colorCode?: string | null;
   colorName?: string | null;
+  machineName?: string | null;
+  packageLiters?: number | null;
 };
 type Category = { id: string; name: string; isActive: boolean };
 type SupplyItem = {
@@ -132,7 +134,10 @@ export default function SuppliesPage() {
 
   function addLine() {
     if (!materialId || quantity <= 0) return;
-    const normalizedQuantity = Math.max(1, Math.round(quantity));
+    const material = materialById.get(materialId);
+    const normalizedQuantity = material?.kind === "Ink"
+      ? Math.max(0.1, Math.round(quantity * 10) / 10)
+      : Math.max(1, Math.round(quantity));
     setLines((current) =>
       current.some((line) => line.materialId === materialId)
         ? current.map((line) =>
@@ -557,8 +562,8 @@ export default function SuppliesPage() {
               </select>
               <input
                 type="number"
-                min="1"
-                step="1"
+                min={materialById.get(materialId)?.kind === "Ink" ? "0.1" : "1"}
+                step={materialById.get(materialId)?.kind === "Ink" ? "0.1" : "1"}
                 value={quantity}
                 onChange={(event) => setQuantity(Number(event.target.value))}
               />

@@ -12,6 +12,8 @@ public sealed record StockCatalogItemResponse(
     string? ColorCode,
     string? ColorName,
     string? ColorHex,
+    string? MachineName,
+    decimal? PackageLiters,
     decimal CurrentQuantity,
     decimal ExpectedQuantity,
     decimal MinimumQuantity,
