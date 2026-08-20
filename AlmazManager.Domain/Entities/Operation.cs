@@ -77,7 +77,10 @@ public sealed class Operation : BaseEntity
                 "Остаток после операции не может быть отрицательным.");
         }
 
-        if (quantityChange == 0)
+        var isMaterialLifecycleEvent =
+            type is OperationType.MaterialArchived or OperationType.MaterialRestored;
+
+        if (quantityChange == 0 && !isMaterialLifecycleEvent)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(quantityChange),

@@ -31,6 +31,24 @@ namespace AlmazManager.Infrastructure.Database.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("CanArchiveMaterials")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("CanCancelDocuments")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("CanManageMaterials")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("CanManageSupplies")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("CanPermanentlyDeleteMaterials")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("CanRestoreMaterials")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -188,6 +206,10 @@ namespace AlmazManager.Infrastructure.Database.Migrations
                     b.Property<int>("Kind")
                         .HasColumnType("integer");
 
+                    b.Property<string>("MachineName")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
                     b.Property<decimal>("MinimumQuantity")
                         .HasPrecision(18, 3)
                         .HasColumnType("numeric(18,3)");
@@ -196,6 +218,10 @@ namespace AlmazManager.Infrastructure.Database.Migrations
                         .IsRequired()
                         .HasMaxLength(250)
                         .HasColumnType("character varying(250)");
+
+                    b.Property<decimal?>("PackageLiters")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
 
                     b.Property<int>("Unit")
                         .HasColumnType("integer");
@@ -213,11 +239,46 @@ namespace AlmazManager.Infrastructure.Database.Migrations
 
                     b.HasIndex("Kind");
 
+                    b.HasIndex("Kind", "MachineName", "ColorName", "PackageLiters");
+
                     b.HasIndex("Name");
 
                     b.HasIndex("Kind", "ColorCode", "WidthMeters");
 
                     b.ToTable("Materials", (string)null);
+                });
+
+            modelBuilder.Entity("AlmazManager.Domain.Entities.Notification", b =>
+                {
+                    b.HasOne("AlmazManager.Domain.Entities.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("AlmazManager.Domain.Entities.SupplyInvoiceItem", b =>
+                {
+                    b.HasOne("AlmazManager.Domain.Entities.Material", null)
+                        .WithMany()
+                        .HasForeignKey("MaterialId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("AlmazManager.Domain.Entities.SupplyInvoice", null)
+                        .WithMany("Items")
+                        .HasForeignKey("SupplyInvoiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("AlmazManager.Domain.Entities.UserPreference", b =>
+                {
+                    b.HasOne("AlmazManager.Domain.Entities.AppUser", null)
+                        .WithOne()
+                        .HasForeignKey("AlmazManager.Domain.Entities.UserPreference", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("AlmazManager.Domain.Entities.Operation", b =>
@@ -352,6 +413,109 @@ namespace AlmazManager.Infrastructure.Database.Migrations
                     b.ToTable("UserCategoryAccesses", (string)null);
                 });
 
+            modelBuilder.Entity("AlmazManager.Domain.Entities.AuditEvent", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("uuid");
+                    b.Property<string>("Action").IsRequired().HasMaxLength(100).HasColumnType("character varying(100)");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("timestamp with time zone");
+                    b.Property<string>("Description").IsRequired().HasMaxLength(1000).HasColumnType("character varying(1000)");
+                    b.Property<Guid?>("DocumentId").HasColumnType("uuid");
+                    b.Property<Guid>("EntityId").HasColumnType("uuid");
+                    b.Property<string>("EntityType").IsRequired().HasMaxLength(100).HasColumnType("character varying(100)");
+                    b.Property<bool>("IsActive").HasColumnType("boolean");
+                    b.Property<Guid?>("MaterialId").HasColumnType("uuid");
+                    b.Property<Guid>("UserId").HasColumnType("uuid");
+                    b.HasKey("Id");
+                    b.HasIndex("CreatedAtUtc");
+                    b.HasIndex("DocumentId");
+                    b.HasIndex("MaterialId");
+                    b.HasIndex("UserId");
+                    b.ToTable("AuditEvents", (string)null);
+                });
+
+            modelBuilder.Entity("AlmazManager.Domain.Entities.Notification", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("uuid");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("timestamp with time zone");
+                    b.Property<string>("DeduplicationKey").HasMaxLength(250).HasColumnType("character varying(250)");
+                    b.Property<bool>("IsActive").HasColumnType("boolean");
+                    b.Property<Guid?>("MaterialId").HasColumnType("uuid");
+                    b.Property<string>("Message").IsRequired().HasMaxLength(1000).HasColumnType("character varying(1000)");
+                    b.Property<DateTime?>("ReadAtUtc").HasColumnType("timestamp with time zone");
+                    b.Property<DateTime?>("ResolvedAtUtc").HasColumnType("timestamp with time zone");
+                    b.Property<Guid?>("SupplyInvoiceId").HasColumnType("uuid");
+                    b.Property<string>("Title").IsRequired().HasMaxLength(200).HasColumnType("character varying(200)");
+                    b.Property<int>("Type").HasColumnType("integer");
+                    b.Property<Guid>("UserId").HasColumnType("uuid");
+                    b.HasKey("Id");
+                    b.HasIndex("UserId", "DeduplicationKey", "ResolvedAtUtc");
+                    b.HasIndex("UserId", "ReadAtUtc");
+                    b.ToTable("Notifications", (string)null);
+                });
+
+            modelBuilder.Entity("AlmazManager.Domain.Entities.SupplyInvoice", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("uuid");
+                    b.Property<decimal>("Amount").HasPrecision(18, 2).HasColumnType("numeric(18,2)");
+                    b.Property<string>("AttachmentPath").HasMaxLength(500).HasColumnType("character varying(500)");
+                    b.Property<string>("Comment").HasMaxLength(1000).HasColumnType("character varying(1000)");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("timestamp with time zone");
+                    b.Property<Guid>("CreatedByUserId").HasColumnType("uuid");
+                    b.Property<DateOnly?>("ExpectedDeliveryDate").HasColumnType("date");
+                    b.Property<DateOnly>("InvoiceDate").HasColumnType("date");
+                    b.Property<string>("InvoiceNumber").IsRequired().HasMaxLength(100).HasColumnType("character varying(100)");
+                    b.Property<bool>("IsActive").HasColumnType("boolean");
+                    b.Property<DateOnly?>("PaymentDueDate").HasColumnType("date");
+                    b.Property<int>("Status").HasColumnType("integer");
+                    b.Property<string>("Supplier").IsRequired().HasMaxLength(250).HasColumnType("character varying(250)");
+                    b.Property<DateTime>("UpdatedAtUtc").HasColumnType("timestamp with time zone");
+                    b.HasKey("Id");
+                    b.HasIndex("ExpectedDeliveryDate");
+                    b.HasIndex("PaymentDueDate");
+                    b.HasIndex("Status");
+                    b.HasIndex("Supplier", "InvoiceNumber", "InvoiceDate").IsUnique();
+                    b.ToTable("SupplyInvoices", (string)null);
+                });
+
+            modelBuilder.Entity("AlmazManager.Domain.Entities.SupplyInvoiceItem", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("uuid");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("timestamp with time zone");
+                    b.Property<decimal>("ExpectedQuantity").HasPrecision(18, 3).HasColumnType("numeric(18,3)");
+                    b.Property<bool>("IsActive").HasColumnType("boolean");
+                    b.Property<Guid>("MaterialId").HasColumnType("uuid");
+                    b.Property<decimal>("ReceivedQuantity").HasPrecision(18, 3).HasColumnType("numeric(18,3)");
+                    b.Property<Guid>("SupplyInvoiceId").HasColumnType("uuid");
+                    b.HasKey("Id");
+                    b.HasIndex("MaterialId");
+                    b.HasIndex("SupplyInvoiceId", "MaterialId").IsUnique();
+                    b.ToTable("SupplyInvoiceItems", (string)null);
+                });
+
+            modelBuilder.Entity("AlmazManager.Domain.Entities.UserPreference", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("uuid");
+                    b.Property<string>("CategoryOrderJson").IsRequired().HasColumnType("jsonb");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("timestamp with time zone");
+                    b.Property<bool>("IsActive").HasColumnType("boolean");
+                    b.Property<string>("MaterialOrderJson").IsRequired().HasColumnType("jsonb");
+                    b.Property<int>("Theme").HasColumnType("integer");
+                    b.Property<Guid>("UserId").HasColumnType("uuid");
+                    b.HasKey("Id");
+                    b.HasIndex("UserId").IsUnique();
+                    b.ToTable("UserPreferences", (string)null);
+                });
+
+            modelBuilder.Entity("AlmazManager.Domain.Entities.WarehouseDocumentSequence", b =>
+                {
+                    b.Property<int>("Type")
+                        .ValueGeneratedNever()
+                        .HasColumnType("integer");
+                    b.Property<int>("LastNumber").HasColumnType("integer");
+                    b.HasKey("Type");
+                    b.ToTable("WarehouseDocumentSequences", (string)null);
+                });
+
             modelBuilder.Entity("AlmazManager.Domain.Entities.WarehouseDocument", b =>
                 {
                     b.Property<Guid>("Id")
@@ -368,6 +532,9 @@ namespace AlmazManager.Infrastructure.Database.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateOnly>("DocumentDate")
+                        .HasColumnType("date");
+
                     b.Property<string>("ExternalNumber")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -383,12 +550,22 @@ namespace AlmazManager.Infrastructure.Database.Migrations
                     b.Property<DateTime?>("PostedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Recipient")
+                        .HasMaxLength(250)
+                        .HasColumnType("character varying(250)");
+
+                    b.Property<int?>("SequenceNumber")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
                     b.Property<string>("Supplier")
                         .HasMaxLength(250)
                         .HasColumnType("character varying(250)");
+
+                    b.Property<Guid?>("SupplyInvoiceId")
+                        .HasColumnType("uuid");
 
                     b.Property<int>("Type")
                         .HasColumnType("integer");
@@ -403,7 +580,13 @@ namespace AlmazManager.Infrastructure.Database.Migrations
 
                     b.HasIndex("Status");
 
+                    b.HasIndex("SupplyInvoiceId");
+
                     b.HasIndex("Type");
+
+                    b.HasIndex("Type", "SequenceNumber")
+                        .IsUnique()
+                        .HasFilter("\"SequenceNumber\" IS NOT NULL");
 
                     b.HasIndex("UserId");
 
@@ -506,6 +689,11 @@ namespace AlmazManager.Infrastructure.Database.Migrations
                 });
 
             modelBuilder.Entity("AlmazManager.Domain.Entities.InventoryDocument", b =>
+                {
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("AlmazManager.Domain.Entities.SupplyInvoice", b =>
                 {
                     b.Navigation("Items");
                 });

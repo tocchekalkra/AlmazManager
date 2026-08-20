@@ -1,4 +1,6 @@
 ﻿using AlmazManager.Application.Features.Inventory.Commands;
+using AlmazManager.Application.Interfaces;
+using AlmazManager.Application.Security;
 using AlmazManager.Contracts.Responses.Inventory;
 using AlmazManager.Domain.Entities;
 using AlmazManager.Domain.Enums;
@@ -11,15 +13,21 @@ public sealed class InventoryAdjustmentHandler
     private readonly IMaterialRepository _materialRepository;
     private readonly IStockRepository _stockRepository;
     private readonly IOperationRepository _operationRepository;
+    private readonly ICategoryAccessService _categoryAccessService;
+    private readonly ICurrentUserService _currentUserService;
 
     public InventoryAdjustmentHandler(
         IMaterialRepository materialRepository,
         IStockRepository stockRepository,
-        IOperationRepository operationRepository)
+        IOperationRepository operationRepository,
+        ICategoryAccessService categoryAccessService,
+        ICurrentUserService currentUserService)
     {
         _materialRepository = materialRepository;
         _stockRepository = stockRepository;
         _operationRepository = operationRepository;
+        _categoryAccessService = categoryAccessService;
+        _currentUserService = currentUserService;
     }
 
     public async Task<IssueInventoryResponse> HandleAsync(
@@ -30,13 +38,6 @@ public sealed class InventoryAdjustmentHandler
             throw new ArgumentException(
                 "Материал не указан.",
                 nameof(command.MaterialId));
-        }
-
-        if (command.UserId == Guid.Empty)
-        {
-            throw new ArgumentException(
-                "Пользователь не указан.",
-                nameof(command.UserId));
         }
 
         if (command.ActualQuantity < 0)
@@ -55,6 +56,27 @@ public sealed class InventoryAdjustmentHandler
                 "Материал не найден.");
         }
 
+        if (!material.IsActive)
+        {
+            throw new InvalidOperationException(
+                "Архивный материал нельзя инвентаризировать.");
+        }
+
+        if (material.Kind == MaterialKind.Standard &&
+            command.ActualQuantity != decimal.Truncate(command.ActualQuantity))
+        {
+            throw new ArgumentException(
+                "Для стандартного материала фактическое количество должно быть целым.");
+        }
+
+        var permission = material.Kind == MaterialKind.Oracal641
+            ? CategoryPermission.InventoryOracal
+            : CategoryPermission.InventoryStandard;
+
+        await _categoryAccessService.EnsureAccessAsync(
+            material.CategoryId,
+            permission);
+
         var stock = await _stockRepository.GetByMaterialIdAsync(
             command.MaterialId);
 
@@ -67,6 +89,17 @@ public sealed class InventoryAdjustmentHandler
 
         var previousQuantity = stock.Quantity;
         var difference = command.ActualQuantity - previousQuantity;
+
+        if (difference == 0)
+        {
+            return new IssueInventoryResponse(
+                Guid.Empty,
+                stock.MaterialId,
+                previousQuantity,
+                stock.Quantity,
+                0,
+                DateTime.UtcNow);
+        }
 
         stock.Adjust(command.ActualQuantity);
 
@@ -85,8 +118,13 @@ public sealed class InventoryAdjustmentHandler
         var operation = new Operation(
             command.MaterialId,
             OperationType.Inventory,
-            Math.Abs(difference),
-            command.UserId,
+            previousQuantity,
+            difference,
+            stock.Quantity,
+            _currentUserService.UserId,
+            null,
+            false,
+            null,
             operationComment);
 
         await _operationRepository.AddAsync(operation);

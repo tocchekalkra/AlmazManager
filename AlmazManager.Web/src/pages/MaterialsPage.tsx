@@ -13,21 +13,33 @@ import {
     ChevronDown,
     ChevronRight,
     Edit3,
+    Droplets,
+    GripVertical,
+    Lock,
     Package,
     Palette,
     Plus,
     RefreshCcw,
     Search,
+    Unlock,
     X,
 } from 'lucide-react';
 
 import api from '../api/api';
+import { loadAllMaterialCatalogItems } from '../api/catalog';
+import { useAuth } from '../auth/AuthContext';
+import {
+    filmCategoryParts,
+    filmMarkerText,
+    findFilmCategoryId,
+} from '../utils/material';
 
 type MaterialCatalogItem = {
     id: string;
     name: string;
     article: string;
     categoryId: string;
+    categoryName: string;
     unit: string;
     minimumQuantity: number;
     currentQuantity: number;
@@ -40,14 +52,8 @@ type MaterialCatalogItem = {
     colorCode?: string | null;
     colorName?: string | null;
     colorHex?: string | null;
-};
-
-type MaterialCatalogResponse = {
-    page: number;
-    pageSize: number;
-    totalCount: number;
-    totalPages: number;
-    items: MaterialCatalogItem[];
+    machineName?: string | null;
+    packageLiters?: number | null;
 };
 
 type Category = {
@@ -59,13 +65,15 @@ type Category = {
 type MaterialForm = {
     id?: string;
 
-    kind: 'Standard' | 'Oracal641';
+    kind: 'Standard' | 'Oracal641' | 'Ink';
 
     name: string;
     article: string;
     articlePrefix: string;
 
     categoryId: string;
+    filmBase: 'White' | 'Transparent';
+    filmFinish: 'Matte' | 'Glossy';
 
     minimumQuantity: string;
     currentQuantity: number;
@@ -75,6 +83,8 @@ type MaterialForm = {
     colorCode: string;
     colorName: string;
     colorHex: string;
+    machineName: string;
+    packageLiters: '1' | '5';
 
     isActive: boolean;
 };
@@ -279,6 +289,8 @@ const emptyForm: MaterialForm = {
     articlePrefix: '',
 
     categoryId: '',
+    filmBase: 'White',
+    filmFinish: 'Matte',
 
     minimumQuantity: '0',
     currentQuantity: 0,
@@ -288,6 +300,8 @@ const emptyForm: MaterialForm = {
     colorCode: '',
     colorName: '',
     colorHex: '',
+    machineName: 'Широкоформатный',
+    packageLiters: '1',
 
     isActive: true,
 };
@@ -300,7 +314,26 @@ const numberFormatter =
         },
     );
 
+const inkColors = [
+    { name: 'Cyan', hex: '#00AEEF' },
+    { name: 'Magenta', hex: '#EC008C' },
+    { name: 'Yellow', hex: '#FFF200' },
+    { name: 'Black', hex: '#111111' },
+    { name: 'White', hex: '#F4F4F4' },
+];
+
+const defaultMachines = ['Широкоформатный', 'Интерьерный', 'Рулонный УФ'];
+
 export default function MaterialsPage() {
+    const { user } = useAuth();
+    const isAdministrator = user?.role === 'Administrator';
+    const [access, setAccess] = useState({
+        canManageMaterials: isAdministrator,
+        canArchiveMaterials: isAdministrator,
+        canRestoreMaterials: isAdministrator,
+        canPermanentlyDeleteMaterials: isAdministrator,
+    });
+
     const [materials, setMaterials] =
         useState<MaterialCatalogItem[]>([]);
 
@@ -337,6 +370,10 @@ export default function MaterialsPage() {
             emptyForm,
         );
 
+    const [orderMode, setOrderMode] = useState(false);
+    const [draggedGroupKey, setDraggedGroupKey] = useState<string | null>(null);
+    const [draggedOracalKey, setDraggedOracalKey] = useState<string | null>(null);
+
     const [
         selectedWidths,
         setSelectedWidths,
@@ -362,8 +399,17 @@ export default function MaterialsPage() {
     const editing =
         Boolean(form.id);
 
+    const reorderingAvailable =
+        search.trim() === '' &&
+        categoryFilter === 'all' &&
+        statusFilter === 'active' &&
+        !loading;
+
     useEffect(() => {
         loadData();
+        api.get<typeof access>('/users/me/access')
+            .then((response) => setAccess(response.data))
+            .catch(() => undefined);
     }, []);
 
     async function loadData() {
@@ -372,12 +418,10 @@ export default function MaterialsPage() {
             setError('');
 
             const [
-                materialsResponse,
+                materialItems,
                 categoriesResponse,
             ] = await Promise.all([
-                api.get<MaterialCatalogResponse>(
-                    '/materials/catalog?pageSize=100',
-                ),
+                loadAllMaterialCatalogItems<MaterialCatalogItem>(),
 
                 api.get<Category[]>(
                     '/categories',
@@ -385,9 +429,7 @@ export default function MaterialsPage() {
             ]);
 
             setMaterials(
-                materialsResponse
-                    .data
-                    .items ?? [],
+                materialItems,
             );
 
             setCategories(
@@ -541,8 +583,7 @@ export default function MaterialsPage() {
             () =>
                 filteredMaterials.filter(
                     (material) =>
-                        material.kind !==
-                        'Oracal641',
+                        material.kind === 'Standard',
                 ),
             [filteredMaterials],
         );
@@ -628,11 +669,8 @@ export default function MaterialsPage() {
                 }
             }
 
-            return Array.from(
-                groups.values(),
-            )
-                .map(
-                    (group) => ({
+            return Array.from(groups.values())
+                .map((group) => ({
                         ...group,
 
                         materials:
@@ -652,15 +690,7 @@ export default function MaterialsPage() {
                                             0,
                                         ),
                                 ),
-                    }),
-                )
-                .sort(
-                    (a, b) =>
-                        a.name.localeCompare(
-                            b.name,
-                            'ru',
-                        ),
-                );
+                    }));
         }, [
             standardMaterials,
             categoryMap,
@@ -677,12 +707,24 @@ export default function MaterialsPage() {
             [filteredMaterials],
         );
 
+    const inkMaterials = useMemo(
+        () => filteredMaterials
+            .filter((material) => material.kind === 'Ink')
+            .slice()
+            .sort((a, b) =>
+                (a.machineName ?? '').localeCompare(b.machineName ?? '', 'ru') ||
+                (a.colorName ?? '').localeCompare(b.colorName ?? '', 'en') ||
+                Number(a.packageLiters ?? 0) - Number(b.packageLiters ?? 0)),
+        [filteredMaterials],
+    );
+
     const oracalRows =
         useMemo(() => {
             const rows =
                 new Map<
                     string,
                     {
+                        key: string;
                         code: string;
                         name: string;
                         hex: string;
@@ -705,6 +747,7 @@ export default function MaterialsPage() {
 
                 const current =
                     rows.get(key) ?? {
+                        key,
                         code,
 
                         name:
@@ -740,19 +783,7 @@ export default function MaterialsPage() {
                 );
             }
 
-            return Array.from(
-                rows.values(),
-            ).sort(
-                (a, b) =>
-                    a.code.localeCompare(
-                        b.code,
-                        'ru',
-                        {
-                            numeric:
-                                true,
-                        },
-                    ),
-            );
+            return Array.from(rows.values());
         }, [
             oracalMaterials,
         ]);
@@ -822,6 +853,76 @@ export default function MaterialsPage() {
         );
     }
 
+    async function reorderStandardGroup(targetKey: string) {
+        if (!orderMode || !draggedGroupKey || draggedGroupKey === targetKey) return;
+
+        const groups = [...standardGroups];
+        const from = groups.findIndex(group => group.key === draggedGroupKey);
+        const to = groups.findIndex(group => group.key === targetKey);
+        if (from < 0 || to < 0) return;
+
+        const [moved] = groups.splice(from, 1);
+        groups.splice(to, 0, moved);
+
+        const standardIds = groups.flatMap(group => group.materials.map(material => material.id));
+        const oracalIds = materials
+            .filter(material => material.kind === 'Oracal641')
+            .map(material => material.id);
+
+        try {
+            setSaving(true);
+            setError('');
+            await api.put('/preferences', {
+                materialOrder: [...standardIds, ...oracalIds],
+            });
+            setDraggedGroupKey(null);
+            await loadData();
+        } catch (requestError: any) {
+            setError(
+                requestError?.response?.data?.message ??
+                'Не удалось сохранить персональный порядок материалов.',
+            );
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    async function reorderOracalRow(targetKey: string) {
+        if (!orderMode || !draggedOracalKey || draggedOracalKey === targetKey) return;
+
+        const rows = [...oracalRows];
+        const from = rows.findIndex(row => row.key === draggedOracalKey);
+        const to = rows.findIndex(row => row.key === targetKey);
+        if (from < 0 || to < 0) return;
+
+        const [moved] = rows.splice(from, 1);
+        rows.splice(to, 0, moved);
+
+        const standardIds = materials
+            .filter(material => material.kind !== 'Oracal641')
+            .map(material => material.id);
+        const oracalIds = rows.flatMap(row => [row.width100, row.width127]
+            .filter((material): material is MaterialCatalogItem => Boolean(material))
+            .map(material => material.id));
+
+        try {
+            setSaving(true);
+            setError('');
+            await api.put('/preferences', {
+                materialOrder: [...standardIds, ...oracalIds],
+            });
+            setDraggedOracalKey(null);
+            await loadData();
+        } catch (requestError: any) {
+            setError(
+                requestError?.response?.data?.message ??
+                'Не удалось сохранить персональный порядок ORACAL.',
+            );
+        } finally {
+            setSaving(false);
+        }
+    }
+
     function applyPreset(
         presetId: string,
     ) {
@@ -843,6 +944,35 @@ export default function MaterialsPage() {
         setSelectedWidths(
             preset.widths,
         );
+
+        if (presetId === 'film') {
+            setForm((current) => ({
+                ...current,
+                categoryId: findFilmCategoryId(
+                    categories,
+                    current.filmBase,
+                    current.filmFinish,
+                ),
+            }));
+        }
+    }
+
+    function changeFilmType(
+        filmBase: 'White' | 'Transparent',
+        filmFinish: 'Matte' | 'Glossy',
+    ) {
+        const categoryId = findFilmCategoryId(
+            categories,
+            filmBase,
+            filmFinish,
+        );
+
+        setForm((current) => ({
+            ...current,
+            filmBase,
+            filmFinish,
+            categoryId: categoryId || current.categoryId,
+        }));
     }
 
     function toggleWidth(
@@ -1009,9 +1139,35 @@ export default function MaterialsPage() {
         setFormOpen(true);
     }
 
+    function openCreateInk() {
+        const inkCategory = categories.find((category) =>
+            category.isActive && category.name.toLowerCase() === 'краска') ??
+            categories.find((category) => category.isActive);
+        const firstColor = inkColors[0];
+
+        setForm({
+            ...emptyForm,
+            kind: 'Ink',
+            categoryId: inkCategory?.id ?? '',
+            name: `Краска ${firstColor.name}`,
+            colorCode: firstColor.name,
+            colorName: firstColor.name,
+            colorHex: firstColor.hex,
+            machineName: defaultMachines[0],
+            packageLiters: '1',
+        });
+        setSelectedWidths([]);
+        setCustomWidth('');
+        setError('');
+        setFormOpen(true);
+    }
+
     function openEdit(
         material: MaterialCatalogItem,
     ) {
+        const category = categories.find(item => item.id === material.categoryId);
+        const film = filmCategoryParts(category?.name ?? '');
+
         setForm({
             id:
                 material.id,
@@ -1020,7 +1176,9 @@ export default function MaterialsPage() {
                 material.kind ===
                     'Oracal641'
                     ? 'Oracal641'
-                    : 'Standard',
+                    : material.kind === 'Ink'
+                        ? 'Ink'
+                        : 'Standard',
 
             name:
                 material.name,
@@ -1033,6 +1191,12 @@ export default function MaterialsPage() {
 
             categoryId:
                 material.categoryId,
+
+            filmBase:
+                film.base,
+
+            filmFinish:
+                film.finish,
 
             minimumQuantity:
                 material.minimumQuantity.toString(),
@@ -1057,12 +1221,16 @@ export default function MaterialsPage() {
                 material.colorHex ??
                 '',
 
+            machineName: material.machineName ?? 'Широкоформатный',
+            packageLiters: material.packageLiters === 5 ? '5' : '1',
+
             isActive:
                 material.isActive,
         });
 
         setSelectedWidths([]);
         setCustomWidth('');
+        setSelectedPreset(film.isFilm ? 'film' : 'custom');
 
         setError('');
         setFormOpen(true);
@@ -1180,7 +1348,27 @@ export default function MaterialsPage() {
                     return;
                 }
 
-                if (
+                if (form.kind === 'Ink') {
+                    if (!form.machineName.trim()) {
+                        setError('Укажите станок.');
+                        return;
+                    }
+
+                    await api.put(`/materials/${form.id}`, {
+                        name: `Краска ${form.colorName}`,
+                        article: form.article.trim() || `INK-${slug(form.machineName)}-${form.colorName.toUpperCase()}-${form.packageLiters}L`,
+                        categoryId: form.categoryId,
+                        unit: 'Liter',
+                        minimumQuantity,
+                        kind: 'Ink',
+                        widthMeters: null,
+                        colorCode: form.colorName,
+                        colorName: form.colorName,
+                        colorHex: form.colorHex,
+                        machineName: form.machineName.trim(),
+                        packageLiters: Number(form.packageLiters),
+                    });
+                } else if (
                     form.kind ===
                     'Oracal641'
                 ) {
@@ -1199,9 +1387,7 @@ export default function MaterialsPage() {
                         `/materials/${form.id}`,
                         {
                             name:
-                                `ORACAL 641 ${form.colorCode} ${form.colorName} ${formatWidth(
-                                    width,
-                                )}`,
+                                'ORACAL 641',
 
                             article:
                                 `ORACAL-641-${form.colorCode}-${width === 1
@@ -1293,6 +1479,29 @@ export default function MaterialsPage() {
             /*
              * СОЗДАНИЕ ORACAL
              */
+            else if (form.kind === 'Ink') {
+                if (!form.machineName.trim()) {
+                    setError('Укажите станок.');
+                    return;
+                }
+
+                await api.post('/materials', {
+                    name: `Краска ${form.colorName}`,
+                    article: `INK-${slug(form.machineName)}-${form.colorName.toUpperCase()}-${form.packageLiters}L`,
+                    categoryId: form.categoryId,
+                    unit: 'Liter',
+                    minimumQuantity,
+                    kind: 'Ink',
+                    widthMeters: null,
+                    colorCode: form.colorName,
+                    colorName: form.colorName,
+                    colorHex: form.colorHex,
+                    machineName: form.machineName.trim(),
+                    packageLiters: Number(form.packageLiters),
+                });
+            }
+
+            /* СОЗДАНИЕ ORACAL */
             else if (
                 form.kind ===
                 'Oracal641'
@@ -1317,9 +1526,7 @@ export default function MaterialsPage() {
                     '/materials',
                     {
                         name:
-                            `ORACAL 641 ${form.colorCode} ${form.colorName} ${formatWidth(
-                                width,
-                            )}`,
+                            'ORACAL 641',
 
                         article:
                             `ORACAL-641-${form.colorCode}-${width === 1
@@ -1453,10 +1660,22 @@ export default function MaterialsPage() {
                 ? 'archive'
                 : 'restore';
 
-        const confirmation =
+        let confirmation =
             material.isActive
                 ? `Архивировать материал «${material.name}»?`
                 : `Восстановить материал «${material.name}»?`;
+
+        if (material.isActive) {
+            try {
+                const impact = await api.get<{ openSupplyLinks: number }>(`/materials/${material.id}/archive-impact`);
+                if (impact.data.openSupplyLinks > 0) {
+                    confirmation += `\n\nВнимание: материал присутствует в ${impact.data.openSupplyLinks} незавершённых поставках.`;
+                }
+                confirmation += '\nИстория операций и документы сохранятся.';
+            } catch {
+                // Основное действие всё равно защищено сервером.
+            }
+        }
 
         if (
             !window.confirm(
@@ -1495,6 +1714,18 @@ export default function MaterialsPage() {
         }
     }
 
+    async function deletePermanently(material: MaterialCatalogItem) {
+        const confirmationName = window.prompt(`Безвозвратное удаление возможно только без истории. Введите точное название:\n${material.name}`);
+        if (confirmationName === null) return;
+        try {
+            await api.delete(`/materials/${material.id}/permanent`, { data: { confirmationName } });
+            closeForm();
+            await loadData();
+        } catch (requestError: any) {
+            setError(requestError?.response?.data?.message ?? 'Не удалось удалить материал. Используйте архив.');
+        }
+    }
+
     return (
         <div className="page">
             <div className="page-heading">
@@ -1509,43 +1740,48 @@ export default function MaterialsPage() {
 
                     <p>
                         Обычные материалы учитываются в штуках.
-                        ORACAL 641 — в погонных метрах.
+                        ORACAL 641 — в погонных метрах, краска — в литрах.
                     </p>
                 </div>
 
-                <div
-                    style={
-                        styles.headingActions
-                    }
-                >
-                    <button
-                        type="button"
-                        className="button secondary"
-                        onClick={
-                            openCreateOracal
+                {access.canManageMaterials && (
+                    <div
+                        style={
+                            styles.headingActions
                         }
                     >
-                        <Palette
-                            size={17}
-                        />
+                        <button
+                            type="button"
+                            className="button secondary"
+                            onClick={openCreateInk}
+                        >
+                            <Droplets size={17} />
+                            Добавить краску
+                        </button>
 
-                        Добавить ORACAL
-                    </button>
+                        <button
+                            type="button"
+                            className="button secondary"
+                            onClick={
+                                openCreateOracal
+                            }
+                        >
+                            <Palette size={17} />
+                            Добавить ORACAL
+                        </button>
 
-                    <button
-                        type="button"
-                        className="button primary"
-                        onClick={
-                            openCreate
-                        }
-                    >
-                        <Plus
-                            size={17}
-                        />
-
-                        Добавить материал
-                    </button>
-                </div>
+                        <button
+                            type="button"
+                            className="button primary"
+                            onClick={
+                                openCreate
+                            }
+                        >
+                            <Plus size={17} />
+                            Добавить материал
+                        </button>
+                    </div>
+                )}
             </div>
 
             <section className="stats-grid">
@@ -1622,13 +1858,14 @@ export default function MaterialsPage() {
                             }
                             onChange={(
                                 event,
-                            ) =>
+                            ) => {
                                 setSearch(
                                     event
                                         .target
                                         .value,
-                                )
-                            }
+                                );
+                                setOrderMode(false);
+                            }}
                             placeholder="Поиск..."
                             style={
                                 styles.searchInput
@@ -1642,13 +1879,14 @@ export default function MaterialsPage() {
                         }
                         onChange={(
                             event,
-                        ) =>
+                        ) => {
                             setCategoryFilter(
                                 event
                                     .target
                                     .value,
-                            )
-                        }
+                            );
+                            setOrderMode(false);
+                        }}
                         style={
                             styles.select
                         }
@@ -1681,13 +1919,14 @@ export default function MaterialsPage() {
                         }
                         onChange={(
                             event,
-                        ) =>
+                        ) => {
                             setStatusFilter(
                                 event
                                     .target
                                     .value,
-                            )
-                        }
+                            );
+                            setOrderMode(false);
+                        }}
                         style={
                             styles.select
                         }
@@ -1729,6 +1968,38 @@ export default function MaterialsPage() {
                 </div>
             </section>
 
+            <section className="panel" style={{ marginTop: 18 }}>
+                <div style={styles.sectionHeader}>
+                    <div>
+                        <p className="eyebrow">INK</p>
+                        <h2>Краска</h2>
+                        <p style={styles.sectionSubtitle}>Остатки по станкам, цветам и фасовке 1 / 5 л.</p>
+                    </div>
+                    {access.canManageMaterials && (
+                        <button type="button" className="button primary" onClick={openCreateInk}>
+                            <Plus size={17} /> Добавить краску
+                        </button>
+                    )}
+                </div>
+                <div className="table-wrapper">
+                    <table className="data-table">
+                        <thead><tr><th>Станок</th><th>Цвет</th><th>Фасовка</th><th>Остаток</th><th>Минимум</th></tr></thead>
+                        <tbody>
+                            {inkMaterials.map((material) => (
+                                <tr key={material.id} className={access.canManageMaterials ? 'clickable-row' : undefined} onClick={() => access.canManageMaterials && openEdit(material)}>
+                                    <td className="primary-cell">{material.machineName || 'Без станка'}<small className="table-subtitle">{material.article}</small></td>
+                                    <td><span style={{ ...styles.colorSwatch, display: 'inline-block', marginRight: 8, background: material.colorHex || '#808080' }} />{material.colorName}</td>
+                                    <td>{numberFormatter.format(material.packageLiters ?? 0)} л</td>
+                                    <td><strong>{numberFormatter.format(material.currentQuantity)} л</strong></td>
+                                    <td>{numberFormatter.format(material.minimumQuantity)} л</td>
+                                </tr>
+                            ))}
+                            {!loading && inkMaterials.length === 0 && <tr><td colSpan={5}>Краска пока не добавлена.</td></tr>}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
             <section
                 className="panel"
                 style={{
@@ -1764,6 +2035,21 @@ export default function MaterialsPage() {
                             styles.groupHeaderActions
                         }
                     >
+                        <button
+                            type="button"
+                            className={orderMode ? 'button primary' : 'button secondary'}
+                            disabled={!reorderingAvailable || saving}
+                            title={!reorderingAvailable ? 'Сбросьте поиск и фильтры, чтобы изменить порядок.' : undefined}
+                            onClick={() => {
+                                setOrderMode(value => !value);
+                                setDraggedGroupKey(null);
+                                setDraggedOracalKey(null);
+                            }}
+                        >
+                            {orderMode ? <Lock size={16} /> : <Unlock size={16} />}
+                            {orderMode ? 'Завершить порядок' : 'Изменить порядок'}
+                        </button>
+
                         <button
                             type="button"
                             className="button secondary"
@@ -1811,8 +2097,13 @@ export default function MaterialsPage() {
                                     )
                                 }
                                 onEdit={
-                                    openEdit
+                                    access.canManageMaterials
+                                        ? openEdit
+                                        : undefined
                                 }
+                                orderMode={orderMode}
+                                onDragStart={() => setDraggedGroupKey(group.key)}
+                                onDrop={() => void reorderStandardGroup(group.key)}
                             />
                         ),
                     )}
@@ -1861,25 +2152,25 @@ export default function MaterialsPage() {
                         </p>
                     </div>
 
-                    <button
-                        type="button"
-                        className="button primary"
-                        onClick={
-                            openCreateOracal
-                        }
-                    >
-                        <Plus
-                            size={17}
-                        />
-
-                        Добавить цвет
-                    </button>
+                    {access.canManageMaterials && (
+                        <button
+                            type="button"
+                            className="button primary"
+                            onClick={
+                                openCreateOracal
+                            }
+                        >
+                            <Plus size={17} />
+                            Добавить цвет
+                        </button>
+                    )}
                 </div>
 
                 <div className="table-wrapper">
                     <table className="data-table">
                         <thead>
                             <tr>
+                                <th aria-label="Порядок" />
                                 <th>
                                     Цвет
                                 </th>
@@ -1919,10 +2210,15 @@ export default function MaterialsPage() {
 
                                     return (
                                         <tr
-                                            key={
-                                                row.code
-                                            }
+                                            key={row.key}
+                                            draggable={orderMode}
+                                            onDragStart={() => setDraggedOracalKey(row.key)}
+                                            onDragOver={(event) => orderMode && event.preventDefault()}
+                                            onDrop={() => void reorderOracalRow(row.key)}
                                         >
+                                            <td className={orderMode ? 'drag-cell' : undefined}>
+                                                {orderMode ? <GripVertical size={17} /> : <Lock size={14} />}
+                                            </td>
                                             <td>
                                                 <div
                                                     style={{
@@ -1954,7 +2250,9 @@ export default function MaterialsPage() {
                                                         row.width100
                                                     }
                                                     onEdit={
-                                                        openEdit
+                                                        access.canManageMaterials
+                                                            ? openEdit
+                                                            : undefined
                                                     }
                                                 />
                                             </td>
@@ -1965,7 +2263,9 @@ export default function MaterialsPage() {
                                                         row.width127
                                                     }
                                                     onEdit={
-                                                        openEdit
+                                                        access.canManageMaterials
+                                                            ? openEdit
+                                                            : undefined
                                                     }
                                                 />
                                             </td>
@@ -1987,7 +2287,7 @@ export default function MaterialsPage() {
                                 oracalRows.length ===
                                 0 && (
                                     <tr>
-                                        <td colSpan={5}>
+                                        <td colSpan={6}>
                                             ORACAL пока не добавлен.
                                         </td>
                                     </tr>
@@ -1997,7 +2297,7 @@ export default function MaterialsPage() {
                 </div>
             </section>
 
-            {formOpen && (
+            {access.canManageMaterials && formOpen && (
                 <div
                     style={
                         styles.overlay
@@ -2138,6 +2438,32 @@ export default function MaterialsPage() {
 
                                     ORACAL 641
                                 </button>
+
+                                <button
+                                    type="button"
+                                    style={{
+                                        ...styles.kindButton,
+                                        ...(form.kind === 'Ink' ? styles.kindButtonActive : {}),
+                                    }}
+                                    onClick={() => {
+                                        const first = inkColors[0];
+                                        const inkCategory = categories.find((category) =>
+                                            category.isActive && category.name.toLowerCase() === 'краска');
+                                        setForm((current) => ({
+                                            ...current,
+                                            kind: 'Ink',
+                                            categoryId: inkCategory?.id ?? current.categoryId,
+                                            colorCode: first.name,
+                                            colorName: first.name,
+                                            colorHex: first.hex,
+                                            machineName: defaultMachines[0],
+                                            packageLiters: '1',
+                                        }));
+                                    }}
+                                >
+                                    <Droplets size={18} />
+                                    Краска
+                                </button>
                             </div>
                         )}
 
@@ -2159,20 +2485,18 @@ export default function MaterialsPage() {
                                     value={
                                         form.categoryId
                                     }
-                                    onChange={(
-                                        event,
-                                    ) =>
-                                        setForm(
-                                            (current) => ({
-                                                ...current,
-
-                                                categoryId:
-                                                    event
-                                                        .target
-                                                        .value,
-                                            }),
-                                        )
-                                    }
+                                    onChange={(event) => {
+                                        const categoryId = event.target.value;
+                                        const category = categories.find(item => item.id === categoryId);
+                                        const film = filmCategoryParts(category?.name ?? '');
+                                        setForm((current) => ({
+                                            ...current,
+                                            categoryId,
+                                            filmBase: film.base,
+                                            filmFinish: film.finish,
+                                        }));
+                                        if (film.isFilm) setSelectedPreset('film');
+                                    }}
                                     style={
                                         styles.input
                                     }
@@ -2208,6 +2532,40 @@ export default function MaterialsPage() {
                             {form.kind ===
                                 'Standard' ? (
                                 <>
+                                    {selectedPreset === 'film' && (
+                                        <>
+                                            <label style={styles.field}>
+                                                <span>Основа плёнки</span>
+                                                <select
+                                                    value={form.filmBase}
+                                                    onChange={(event) => changeFilmType(
+                                                        event.target.value as 'White' | 'Transparent',
+                                                        form.filmFinish,
+                                                    )}
+                                                    style={styles.input}
+                                                >
+                                                    <option value="White">Белая</option>
+                                                    <option value="Transparent">Прозрачная</option>
+                                                </select>
+                                            </label>
+
+                                            <label style={styles.field}>
+                                                <span>Поверхность плёнки</span>
+                                                <select
+                                                    value={form.filmFinish}
+                                                    onChange={(event) => changeFilmType(
+                                                        form.filmBase,
+                                                        event.target.value as 'Matte' | 'Glossy',
+                                                    )}
+                                                    style={styles.input}
+                                                >
+                                                    <option value="Matte">Матовая</option>
+                                                    <option value="Glossy">Глянцевая</option>
+                                                </select>
+                                            </label>
+                                        </>
+                                    )}
+
                                     <label
                                         style={
                                             styles.field
@@ -2544,6 +2902,52 @@ export default function MaterialsPage() {
                                         </>
                                     )}
                                 </>
+                            ) : form.kind === 'Ink' ? (
+                                <>
+                                    <label style={styles.field}>
+                                        <span>Станок</span>
+                                        <input
+                                            list="ink-machine-options"
+                                            value={form.machineName}
+                                            onChange={(event) => setForm((current) => ({ ...current, machineName: event.target.value }))}
+                                            placeholder="Название станка"
+                                            style={styles.input}
+                                        />
+                                        <datalist id="ink-machine-options">
+                                            {defaultMachines.map((machine) => <option key={machine} value={machine} />)}
+                                        </datalist>
+                                        <small style={styles.helper}>Можно ввести новое название станка.</small>
+                                    </label>
+
+                                    <label style={styles.field}>
+                                        <span>Цвет</span>
+                                        <select
+                                            value={form.colorName}
+                                            onChange={(event) => {
+                                                const selected = inkColors.find((color) => color.name === event.target.value) ?? inkColors[0];
+                                                setForm((current) => ({ ...current, colorCode: selected.name, colorName: selected.name, colorHex: selected.hex }));
+                                            }}
+                                            style={styles.input}
+                                        >
+                                            {inkColors.map((color) => <option key={color.name} value={color.name}>{color.name}</option>)}
+                                        </select>
+                                    </label>
+
+                                    <label style={styles.field}>
+                                        <span>Фасовка</span>
+                                        <select value={form.packageLiters} onChange={(event) => setForm((current) => ({ ...current, packageLiters: event.target.value as '1' | '5' }))} style={styles.input}>
+                                            <option value="1">1 л</option>
+                                            <option value="5">5 л</option>
+                                        </select>
+                                    </label>
+
+                                    {editing && (
+                                        <label style={styles.field}>
+                                            <span>Артикул</span>
+                                            <input value={form.article} onChange={(event) => setForm((current) => ({ ...current, article: event.target.value }))} style={styles.input} />
+                                        </label>
+                                    )}
+                                </>
                             ) : (
                                 <>
                                     <label
@@ -2675,10 +3079,11 @@ export default function MaterialsPage() {
                                     type="number"
                                     min="0"
                                     step={
-                                        form.kind ===
-                                            'Oracal641'
-                                            ? '0.1'
-                                            : '1'
+                                        form.kind === 'Standard'
+                                            ? '1'
+                                            : form.kind === 'Ink'
+                                                ? '0.1'
+                                                : '0.01'
                                     }
                                     value={
                                         form.minimumQuantity
@@ -2709,7 +3114,7 @@ export default function MaterialsPage() {
                                 styles.modalFooter
                             }
                         >
-                            {editing && (
+                            {editing && ((form.isActive && access.canArchiveMaterials) || (!form.isActive && access.canRestoreMaterials)) && (
                                 <button
                                     type="button"
                                     className="button secondary"
@@ -2733,6 +3138,19 @@ export default function MaterialsPage() {
                                     {form.isActive
                                         ? 'В архив'
                                         : 'Восстановить'}
+                                </button>
+                            )}
+
+                            {editing && !form.isActive && access.canPermanentlyDeleteMaterials && (
+                                <button
+                                    type="button"
+                                    className="button danger"
+                                    onClick={() => {
+                                        const material = materials.find((item) => item.id === form.id);
+                                        if (material) void deletePermanently(material);
+                                    }}
+                                >
+                                    Удалить безвозвратно
                                 </button>
                             )}
 
@@ -2783,19 +3201,30 @@ function StandardMaterialGroupCard({
     expanded,
     onToggle,
     onEdit,
+    orderMode,
+    onDragStart,
+    onDrop,
 }: {
     group: StandardMaterialGroup;
     expanded: boolean;
     onToggle: () => void;
-    onEdit: (
+    onEdit?: (
         material: MaterialCatalogItem,
     ) => void;
+    orderMode: boolean;
+    onDragStart: () => void;
+    onDrop: () => void;
 }) {
     return (
         <div
-            style={
-                styles.groupCard
-            }
+            style={{
+                ...styles.groupCard,
+                ...(orderMode ? styles.groupCardSorting : {}),
+            }}
+            draggable={orderMode}
+            onDragStart={onDragStart}
+            onDragOver={(event) => orderMode && event.preventDefault()}
+            onDrop={onDrop}
         >
             <button
                 type="button"
@@ -2806,6 +3235,7 @@ function StandardMaterialGroupCard({
                     onToggle
                 }
             >
+                {orderMode && <GripVertical size={18} />}
                 {expanded ? (
                     <ChevronDown
                         size={20}
@@ -2840,7 +3270,7 @@ function StandardMaterialGroupCard({
                         {
                             group.materials.length
                         }{' '}
-                        ширин
+                        {group.materials[0]?.kind === 'Ink' ? 'шт.' : 'ширин'}
                     </div>
                 </div>
 
@@ -2874,12 +3304,18 @@ function StandardMaterialGroupCard({
                                             styles.widthValue
                                         }
                                     >
-                                        {material.widthMeters
-                                            ? formatWidth(
-                                                material.widthMeters,
-                                            )
-                                            : 'Без ширины'}
+                                        {material.kind === 'Ink'
+                                            ? `${material.machineName ?? 'Без станка'} · ${material.colorName ?? 'Без цвета'} · ${material.packageLiters ?? '—'} л`
+                                            : material.widthMeters
+                                                ? formatWidth(material.widthMeters)
+                                                : 'Без ширины'}
                                     </strong>
+
+                                    {filmMarkerText(material.categoryName) && (
+                                        <span style={styles.filmMarker}>
+                                            {filmMarkerText(material.categoryName)}
+                                        </span>
+                                    )}
 
                                     <div
                                         style={
@@ -2899,21 +3335,19 @@ function StandardMaterialGroupCard({
                                     шт.
                                 </div>
 
-                                <button
-                                    type="button"
-                                    style={
-                                        styles.iconButton
-                                    }
-                                    onClick={() =>
-                                        onEdit(
-                                            material,
-                                        )
-                                    }
-                                >
-                                    <Edit3
-                                        size={16}
-                                    />
-                                </button>
+                                {onEdit && (
+                                    <button
+                                        type="button"
+                                        style={
+                                            styles.iconButton
+                                        }
+                                        onClick={() =>
+                                            onEdit(material)
+                                        }
+                                    >
+                                        <Edit3 size={16} />
+                                    </button>
+                                )}
                             </div>
                         ),
                     )}
@@ -2928,12 +3362,20 @@ function OracalQuantityCell({
     onEdit,
 }: {
     material?: MaterialCatalogItem;
-    onEdit: (
+    onEdit?: (
         material: MaterialCatalogItem,
     ) => void;
 }) {
     if (!material) {
         return <>—</>;
+    }
+
+    if (!onEdit) {
+        return (
+            <strong>
+                {numberFormatter.format(material.currentQuantity)} м
+            </strong>
+        );
     }
 
     return (
@@ -3016,6 +3458,14 @@ function formatWidth(
                 2,
         },
     )} м`;
+}
+
+function slug(value: string) {
+    return value
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-ZА-ЯЁ0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
 }
 
 const styles: Record<
@@ -3134,6 +3584,12 @@ const styles: Record<
             'hidden',
     },
 
+    groupCardSorting: {
+        borderColor: '#4a94ff',
+        cursor: 'grab',
+        boxShadow: '0 0 0 2px rgba(74,148,255,.08)',
+    },
+
     groupSummary: {
         width:
             '100%',
@@ -3190,6 +3646,25 @@ const styles: Record<
     widthValue: {
         fontSize:
             18,
+    },
+
+    filmMarker: {
+        display:
+            'inline-flex',
+        marginLeft:
+            7,
+        padding:
+            '2px 6px',
+        border:
+            '1px solid rgba(74,166,255,.35)',
+        borderRadius:
+            6,
+        color:
+            '#93c5fd',
+        fontSize:
+            10,
+        fontWeight:
+            900,
     },
 
     colorSwatch: {

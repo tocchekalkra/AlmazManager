@@ -6,5 +6,7 @@ public enum OperationType
     Issue = 2,
     Inventory = 3,
     Return = 4,
-    WriteOff = 5
+    WriteOff = 5,
+    MaterialArchived = 6,
+    MaterialRestored = 7
 }

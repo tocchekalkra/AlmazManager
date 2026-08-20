@@ -12,8 +12,11 @@ public sealed class WarehouseDocument : BaseEntity
         string number,
         WarehouseDocumentType type,
         Guid userId,
+        DateOnly documentDate,
+        Guid? supplyInvoiceId,
         string? supplier,
         string? externalNumber,
+        string? recipient,
         string? comment)
     {
         if (string.IsNullOrWhiteSpace(number))
@@ -33,10 +36,13 @@ public sealed class WarehouseDocument : BaseEntity
         Number = number.Trim();
         Type = type;
         UserId = userId;
+        DocumentDate = documentDate;
+        SupplyInvoiceId = supplyInvoiceId;
         Status = WarehouseDocumentStatus.Draft;
 
         ChangeSupplier(supplier);
         ChangeExternalNumber(externalNumber);
+        ChangeRecipient(recipient);
         ChangeComment(comment);
     }
 
@@ -49,9 +55,17 @@ public sealed class WarehouseDocument : BaseEntity
 
     public Guid UserId { get; private set; }
 
+    public int? SequenceNumber { get; private set; }
+
+    public DateOnly DocumentDate { get; private set; }
+
+    public Guid? SupplyInvoiceId { get; private set; }
+
     public string? Supplier { get; private set; }
 
     public string? ExternalNumber { get; private set; }
+
+    public string? Recipient { get; private set; }
 
     public string? Comment { get; private set; }
 
@@ -97,6 +111,53 @@ public sealed class WarehouseDocument : BaseEntity
             string.IsNullOrWhiteSpace(externalNumber)
                 ? null
                 : externalNumber.Trim();
+    }
+
+    public void ChangeDocumentDate(DateOnly documentDate)
+    {
+        EnsureDraft();
+
+        DocumentDate = documentDate;
+    }
+
+    public void ChangeRecipient(string? recipient)
+    {
+        EnsureDraft();
+
+        if (!string.IsNullOrWhiteSpace(recipient) &&
+            recipient.Trim().Length > 250)
+        {
+            throw new ArgumentException(
+                "Получатель или объект не может быть длиннее 250 символов.",
+                nameof(recipient));
+        }
+
+        Recipient =
+            string.IsNullOrWhiteSpace(recipient)
+                ? null
+                : recipient.Trim();
+    }
+
+    public void AssignNumber(int sequenceNumber)
+    {
+        EnsureDraft();
+
+        if (sequenceNumber <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(sequenceNumber),
+                "Номер документа должен быть больше нуля.");
+        }
+
+        SequenceNumber = sequenceNumber;
+
+        var prefix =
+            Type == WarehouseDocumentType.Receiving
+                ? "П"
+                : "Р";
+
+        Number =
+            $"{prefix}{sequenceNumber} — {DocumentDate:dd_MM_yyyy}";
     }
 
     public void ChangeComment(string? comment)

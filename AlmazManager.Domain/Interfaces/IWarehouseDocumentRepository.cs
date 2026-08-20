@@ -9,6 +9,9 @@ public interface IWarehouseDocumentRepository
 
     Task<List<WarehouseDocument>> GetAllAsync();
 
+    Task<int> ReserveNextNumberAsync(
+        AlmazManager.Domain.Enums.WarehouseDocumentType type);
+
     Task AddAsync(
         WarehouseDocument document);
 

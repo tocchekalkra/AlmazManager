@@ -68,8 +68,11 @@ public sealed class WarehouseDocumentsController :
         var command =
             new CreateWarehouseDocumentCommand(
                 request.Type,
+                request.DocumentDate ?? DateOnly.FromDateTime(DateTime.Now),
+                request.SupplyInvoiceId,
                 request.Supplier,
                 request.ExternalNumber,
+                request.Recipient,
                 request.Comment,
                 request.Items
                     .Select(x =>
@@ -127,6 +130,10 @@ public sealed class WarehouseDocumentsController :
         var command =
             new UpdateWarehouseDocumentCommand(
                 id,
+                request.DocumentDate,
+                request.Supplier,
+                request.ExternalNumber,
+                request.Recipient,
                 request.Comment,
                 request.Items
                     .Select(x =>

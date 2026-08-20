@@ -27,13 +27,21 @@ public sealed class PostWarehouseDocumentHandler
     private readonly ICurrentUserService
         _currentUserService;
 
+    private readonly ISupplyInvoiceRepository
+        _supplyInvoiceRepository;
+
+    private readonly IStockNotificationService
+        _stockNotificationService;
+
     public PostWarehouseDocumentHandler(
         IWarehouseDocumentRepository documentRepository,
         IMaterialRepository materialRepository,
         IStockRepository stockRepository,
         IOperationRepository operationRepository,
         ICategoryAccessService categoryAccessService,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        ISupplyInvoiceRepository supplyInvoiceRepository,
+        IStockNotificationService stockNotificationService)
     {
         _documentRepository =
             documentRepository;
@@ -52,6 +60,12 @@ public sealed class PostWarehouseDocumentHandler
 
         _currentUserService =
             currentUserService;
+
+        _supplyInvoiceRepository =
+            supplyInvoiceRepository;
+
+        _stockNotificationService =
+            stockNotificationService;
     }
 
     public async Task<WarehouseDocumentResponse>
@@ -82,6 +96,19 @@ public sealed class PostWarehouseDocumentHandler
                 "Документ не содержит материалов.");
         }
 
+        SupplyInvoice? supplyInvoice = null;
+
+        if (document.SupplyInvoiceId.HasValue)
+        {
+            if (document.Type != WarehouseDocumentType.Receiving)
+                throw new InvalidOperationException("Связать со счётом можно только документ прихода.");
+
+            supplyInvoice = await _supplyInvoiceRepository.GetByIdAsync(document.SupplyInvoiceId.Value)
+                ?? throw new InvalidOperationException("Связанный счёт не найден.");
+        }
+
+        var materialsById = new Dictionary<Guid, Material>();
+
         foreach (var item in document.Items)
         {
             var material =
@@ -99,6 +126,24 @@ public sealed class PostWarehouseDocumentHandler
             {
                 throw new InvalidOperationException(
                     $"Материал '{material.Name}' находится в архиве.");
+            }
+
+            materialsById[material.Id] = material;
+
+            if (supplyInvoice is not null)
+            {
+                var supplyItem = supplyInvoice.Items.FirstOrDefault(x => x.MaterialId == item.MaterialId)
+                    ?? throw new InvalidOperationException($"Материал '{material.Name}' отсутствует в связанном счёте.");
+
+                if (item.Quantity > supplyItem.RemainingQuantity)
+                    throw new InvalidOperationException($"Приход '{material.Name}' превышает оставшееся количество по счёту.");
+            }
+
+            if (material.Kind == MaterialKind.Standard &&
+                item.Quantity != decimal.Truncate(item.Quantity))
+            {
+                throw new InvalidOperationException(
+                    $"Для материала '{material.Name}' количество должно быть целым.");
             }
 
             var permission =
@@ -134,6 +179,11 @@ public sealed class PostWarehouseDocumentHandler
                 }
             }
         }
+
+        var sequenceNumber = await _documentRepository.ReserveNextNumberAsync(document.Type);
+        document.AssignNumber(sequenceNumber);
+
+        var stockChanges = new List<(Material Material, decimal Before, decimal After)>();
 
         foreach (var item in document.Items)
         {
@@ -206,12 +256,25 @@ public sealed class PostWarehouseDocumentHandler
             await _operationRepository
                 .AddAsync(
                     operation);
+
+            stockChanges.Add((materialsById[item.MaterialId], quantityBefore, quantityAfter));
+
+            if (supplyInvoice is not null)
+                supplyInvoice.RegisterReceipt(item.MaterialId, item.Quantity);
         }
 
         document.Post();
 
         await _documentRepository
             .SaveChangesAsync();
+
+        foreach (var change in stockChanges)
+        {
+            await _stockNotificationService.HandleStockChangeAsync(
+                change.Material,
+                change.Before,
+                change.After);
+        }
 
         return Map(document);
     }
@@ -245,6 +308,11 @@ public sealed class PostWarehouseDocumentHandler
                 $"Накладная: {document.ExternalNumber}.");
         }
 
+        if (!string.IsNullOrWhiteSpace(document.Recipient))
+        {
+            parts.Add($"Получатель/объект: {document.Recipient}.");
+        }
+
         if (!string.IsNullOrWhiteSpace(
                 document.Comment))
         {
@@ -266,8 +334,12 @@ public sealed class PostWarehouseDocumentHandler
             document.Type.ToString(),
             document.Status.ToString(),
             document.UserId,
+            document.SequenceNumber,
+            document.DocumentDate,
+            document.SupplyInvoiceId,
             document.Supplier,
             document.ExternalNumber,
+            document.Recipient,
             document.Comment,
             document.CreatedAtUtc,
             document.PostedAtUtc,

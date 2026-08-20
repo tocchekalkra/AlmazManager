@@ -1,4 +1,6 @@
 ﻿using AlmazManager.Application.Features.InventoryDocuments.Commands;
+using AlmazManager.Application.Interfaces;
+using AlmazManager.Application.Security;
 using AlmazManager.Contracts.Responses.InventoryDocuments;
 using AlmazManager.Domain.Enums;
 using AlmazManager.Domain.Interfaces;
@@ -10,15 +12,18 @@ public sealed class UpdateInventoryDocumentHandler
     private readonly IInventoryDocumentRepository _documentRepository;
     private readonly IMaterialRepository _materialRepository;
     private readonly IStockRepository _stockRepository;
+    private readonly ICategoryAccessService _categoryAccessService;
 
     public UpdateInventoryDocumentHandler(
         IInventoryDocumentRepository documentRepository,
         IMaterialRepository materialRepository,
-        IStockRepository stockRepository)
+        IStockRepository stockRepository,
+        ICategoryAccessService categoryAccessService)
     {
         _documentRepository = documentRepository;
         _materialRepository = materialRepository;
         _stockRepository = stockRepository;
+        _categoryAccessService = categoryAccessService;
     }
 
     public async Task<InventoryDocumentResponse> HandleAsync(
@@ -39,6 +44,26 @@ public sealed class UpdateInventoryDocumentHandler
         {
             throw new InvalidOperationException(
                 "Редактировать можно только черновик инвентаризации.");
+        }
+
+        foreach (var existingItem in document.Items)
+        {
+            var existingMaterial = await _materialRepository.GetByIdAsync(
+                existingItem.MaterialId);
+
+            if (existingMaterial is null)
+            {
+                throw new InvalidOperationException(
+                    "Материал из документа не найден.");
+            }
+
+            var existingPermission = existingMaterial.Kind == MaterialKind.Oracal641
+                ? CategoryPermission.InventoryOracal
+                : CategoryPermission.InventoryStandard;
+
+            await _categoryAccessService.EnsureAccessAsync(
+                existingMaterial.CategoryId,
+                existingPermission);
         }
 
         if (command.Items is null ||
@@ -95,6 +120,27 @@ public sealed class UpdateInventoryDocumentHandler
                 throw new InvalidOperationException(
                     $"Материал {requested.MaterialId} не найден.");
             }
+
+            if (!material.IsActive)
+            {
+                throw new InvalidOperationException(
+                    $"Материал '{material.Name}' находится в архиве.");
+            }
+
+            if (material.Kind == MaterialKind.Standard &&
+                requested.ActualQuantity != decimal.Truncate(requested.ActualQuantity))
+            {
+                throw new ArgumentException(
+                    $"Для материала '{material.Name}' количество должно быть целым.");
+            }
+
+            var permission = material.Kind == MaterialKind.Oracal641
+                ? CategoryPermission.InventoryOracal
+                : CategoryPermission.InventoryStandard;
+
+            await _categoryAccessService.EnsureAccessAsync(
+                material.CategoryId,
+                permission);
 
             var existing =
                 document.Items.FirstOrDefault(

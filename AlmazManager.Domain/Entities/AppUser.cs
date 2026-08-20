@@ -26,6 +26,18 @@ public sealed class AppUser : BaseEntity
 
     public UserRole Role { get; private set; }
 
+    public bool CanManageMaterials { get; private set; }
+
+    public bool CanArchiveMaterials { get; private set; }
+
+    public bool CanRestoreMaterials { get; private set; }
+
+    public bool CanPermanentlyDeleteMaterials { get; private set; }
+
+    public bool CanCancelDocuments { get; private set; }
+
+    public bool CanManageSupplies { get; private set; }
+
     public void ChangeFullName(string fullName)
     {
         if (string.IsNullOrWhiteSpace(fullName))
@@ -81,6 +93,22 @@ public sealed class AppUser : BaseEntity
         }
 
         Role = role;
+    }
+
+    public void ChangeSystemPermissions(
+        bool canManageMaterials,
+        bool canArchiveMaterials,
+        bool canRestoreMaterials,
+        bool canPermanentlyDeleteMaterials,
+        bool canCancelDocuments,
+        bool canManageSupplies)
+    {
+        CanManageMaterials = canManageMaterials;
+        CanArchiveMaterials = canArchiveMaterials;
+        CanRestoreMaterials = canRestoreMaterials;
+        CanPermanentlyDeleteMaterials = canPermanentlyDeleteMaterials;
+        CanCancelDocuments = canCancelDocuments;
+        CanManageSupplies = canManageSupplies;
     }
 
     public void Archive()

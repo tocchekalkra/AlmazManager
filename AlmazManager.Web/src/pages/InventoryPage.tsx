@@ -17,12 +17,15 @@ import {
 } from 'lucide-react';
 
 import api from '../api/api';
+import { loadAllMaterialCatalogItems } from '../api/catalog';
+import { filmMarkerText } from '../utils/material';
 
 type MaterialCatalogItem = {
     id: string;
     name: string;
     article: string;
     categoryId: string;
+    categoryName: string;
     unit: string;
     minimumQuantity: number;
     currentQuantity: number;
@@ -30,21 +33,24 @@ type MaterialCatalogItem = {
     isActive: boolean;
     kind: string;
     widthMeters?: number | null;
-};
-
-type MaterialCatalogResponse = {
-    page: number;
-    pageSize: number;
-    totalCount: number;
-    totalPages: number;
-    items: MaterialCatalogItem[];
+    colorName?: string | null;
+    colorHex?: string | null;
+    machineName?: string | null;
+    packageLiters?: number | null;
 };
 
 type InventoryRow = {
     materialId: string;
     name: string;
     article: string;
+    categoryId: string;
+    categoryName: string;
+    kind: string;
     widthMeters?: number | null;
+    colorName?: string | null;
+    colorHex?: string | null;
+    machineName?: string | null;
+    packageLiters?: number | null;
     expectedQuantity: number;
     actualQuantity: number;
     counted: boolean;
@@ -53,6 +59,8 @@ type InventoryRow = {
 type StandardGroup = {
     key: string;
     name: string;
+    categoryId: string;
+    categoryName: string;
     rows: InventoryRow[];
 };
 
@@ -106,18 +114,11 @@ export default function InventoryPage() {
             setLoading(true);
             setError('');
 
-            const response =
-                await api.get<MaterialCatalogResponse>(
-                    '/materials/catalog?pageSize=100',
-                );
+            const items =
+                await loadAllMaterialCatalogItems<MaterialCatalogItem>();
 
             const materials =
-                response.data.items.filter(
-                    material =>
-                        material.isActive &&
-                        material.kind !==
-                        'Oracal641',
-                );
+                items.filter(material => material.isActive);
 
             setRows(
                 materials.map(
@@ -131,8 +132,22 @@ export default function InventoryPage() {
                         article:
                             material.article,
 
+                        categoryId:
+                            material.categoryId,
+
+                        categoryName:
+                            material.categoryName,
+
+                        kind:
+                            material.kind,
+
                         widthMeters:
                             material.widthMeters,
+
+                        colorName: material.colorName,
+                        colorHex: material.colorHex,
+                        machineName: material.machineName,
+                        packageLiters: material.packageLiters,
 
                         expectedQuantity:
                             material.currentQuantity,
@@ -173,20 +188,19 @@ export default function InventoryPage() {
                 >();
 
             for (const row of rows) {
-                const name =
-                    normalizeMaterialName(
-                        row.name,
-                    );
+                const name = row.kind === 'Ink'
+                    ? (row.machineName?.trim() || 'Без станка')
+                    : normalizeMaterialName(row.name);
 
                 const key =
-                    name
-                        .trim()
-                        .toLowerCase();
+                    `${row.categoryId}::${name.trim().toLowerCase()}`;
 
                 const group =
                     map.get(key) ?? {
                         key,
                         name,
+                        categoryId: row.categoryId,
+                        categoryName: row.categoryName,
                         rows: [],
                     };
 
@@ -205,14 +219,9 @@ export default function InventoryPage() {
                             .slice()
                             .sort(
                                 (a, b) =>
-                                    Number(
-                                        b.widthMeters ??
-                                        0,
-                                    ) -
-                                    Number(
-                                        a.widthMeters ??
-                                        0,
-                                    ),
+                                    a.kind === 'Ink'
+                                        ? inkColorOrder(a.colorName) - inkColorOrder(b.colorName) || Number(a.packageLiters ?? 0) - Number(b.packageLiters ?? 0)
+                                        : Number(b.widthMeters ?? 0) - Number(a.widthMeters ?? 0),
                             ),
                 }))
                 .sort(
@@ -333,17 +342,13 @@ export default function InventoryPage() {
                             return row;
                         }
 
-                        const next =
-                            Math.max(
-                                0,
-                                Math.round(
-                                    Number.isFinite(
-                                        value,
-                                    )
-                                        ? value
-                                        : 0,
-                                ),
-                            );
+                        const raw = Number.isFinite(value) ? value : 0;
+                        const next = Math.max(0,
+                            row.kind === 'Oracal641'
+                                ? Math.round(raw * 100) / 100
+                                : row.kind === 'Ink'
+                                    ? Math.round(raw * 10) / 10
+                                    : Math.round(raw));
 
                         return {
                             ...row,
@@ -374,8 +379,7 @@ export default function InventoryPage() {
 
         changeActualQuantity(
             materialId,
-            row.actualQuantity +
-            delta,
+            row.actualQuantity + (row.kind === 'Oracal641' ? delta / 100 : row.kind === 'Ink' ? delta / 10 : delta),
         );
     }
 
@@ -728,6 +732,10 @@ export default function InventoryPage() {
                             style={{
                                 marginTop:
                                     15,
+                                border:
+                                    '1px solid rgba(74,166,255,.24)',
+                                boxShadow:
+                                    '0 10px 28px rgba(0,0,0,.14)',
                             }}
                         >
                             <div
@@ -736,6 +744,9 @@ export default function InventoryPage() {
                                 }
                             >
                                 <div>
+                                    <p className="eyebrow">
+                                        {group.categoryName}
+                                    </p>
                                     <h2
                                         style={
                                             styles.groupTitle
@@ -755,7 +766,7 @@ export default function InventoryPage() {
                                             group.rows
                                                 .length
                                         }{' '}
-                                        ширин
+                                        {group.rows[0]?.kind === 'Ink' ? 'шт.' : 'ширин'}
                                     </span>
                                 </div>
                             </div>
@@ -767,7 +778,7 @@ export default function InventoryPage() {
                                 }}
                             >
                                 <div>
-                                    Ширина
+                                    {group.rows[0]?.kind === 'Ink' ? 'Цвет' : 'Ширина'}
                                 </div>
 
                                 <div>
@@ -811,17 +822,24 @@ export default function InventoryPage() {
                                             }}
                                         >
                                             <div>
+                                                {(row.kind === 'Oracal641' || row.kind === 'Ink') && row.colorHex && (
+                                                    <i style={{ display: 'inline-block', width: 16, height: 16, borderRadius: 5, marginRight: 8, verticalAlign: 'middle', background: row.colorHex, border: '1px solid rgba(127,127,127,.35)' }} />
+                                                )}
                                                 <strong
                                                     style={
                                                         styles.width
                                                     }
                                                 >
-                                                    {row.widthMeters
-                                                        ? formatWidth(
-                                                            row.widthMeters,
-                                                        )
-                                                        : '—'}
+                                                    {row.kind === 'Ink'
+                                                        ? `${row.colorName ?? 'Без цвета'} · ${row.packageLiters ?? '—'} л`
+                                                        : row.widthMeters ? formatWidth(row.widthMeters) : '—'}
                                                 </strong>
+
+                                                {filmMarkerText(row.categoryName) && (
+                                                    <span style={styles.filmMarker}>
+                                                        {filmMarkerText(row.categoryName)}
+                                                    </span>
+                                                )}
 
                                                 <div
                                                     style={
@@ -866,7 +884,7 @@ export default function InventoryPage() {
                                                     <input
                                                         type="number"
                                                         min="0"
-                                                        step="1"
+                                                        step={row.kind === 'Oracal641' ? '0.01' : row.kind === 'Ink' ? '0.1' : '1'}
                                                         value={
                                                             row.actualQuantity
                                                         }
@@ -910,7 +928,7 @@ export default function InventoryPage() {
                                                             styles.muted
                                                         }
                                                     >
-                                                        шт.
+                                                        {quantityUnit(row.kind)}
                                                     </span>
                                                 </div>
 
@@ -941,7 +959,7 @@ export default function InventoryPage() {
                                                 {numberFormatter.format(
                                                     row.expectedQuantity,
                                                 )}{' '}
-                                                шт.
+                                                {quantityUnit(row.kind)}
                                             </strong>
 
                                             <Difference
@@ -1214,6 +1232,16 @@ function normalizeMaterialName(
         .trim();
 }
 
+function inkColorOrder(value?: string | null) {
+    const order = ['Cyan', 'Magenta', 'Yellow', 'Black', 'White'];
+    const index = order.indexOf(value ?? '');
+    return index < 0 ? 99 : index;
+}
+
+function quantityUnit(kind: string) {
+    return kind === 'Oracal641' ? 'м' : kind === 'Ink' ? 'л' : 'шт.';
+}
+
 function formatWidth(
     value: number,
 ) {
@@ -1336,6 +1364,17 @@ const styles: Record<
 
     width: {
         fontSize: 17,
+    },
+
+    filmMarker: {
+        display: 'inline-flex',
+        marginLeft: 7,
+        padding: '2px 6px',
+        border: '1px solid rgba(74,166,255,.35)',
+        borderRadius: 6,
+        color: '#93c5fd',
+        fontSize: 10,
+        fontWeight: 900,
     },
 
     article: {

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 
 import api from '../api/api';
+import { loadAllMaterialCatalogItems } from '../api/catalog';
 
 type MaterialCatalogItem = {
     id: string;
@@ -31,14 +32,6 @@ type MaterialCatalogItem = {
     colorCode?: string | null;
     colorName?: string | null;
     colorHex?: string | null;
-};
-
-type MaterialCatalogResponse = {
-    page: number;
-    pageSize: number;
-    totalCount: number;
-    totalPages: number;
-    items: MaterialCatalogItem[];
 };
 
 type OracalInventoryRow = {
@@ -112,13 +105,11 @@ export default function OracalInventoryPage() {
             setLoading(true);
             setError('');
 
-            const response =
-                await api.get<MaterialCatalogResponse>(
-                    '/materials/catalog?pageSize=100',
-                );
+            const items =
+                await loadAllMaterialCatalogItems<MaterialCatalogItem>();
 
             const oracal =
-                response.data.items.filter(
+                items.filter(
                     material =>
                         material.isActive &&
                         material.kind ===
@@ -337,11 +328,11 @@ export default function OracalInventoryPage() {
                                 actualQuantity:
                                     Math.max(
                                         0,
-                                        Number.isFinite(
-                                            value,
-                                        )
-                                            ? value
-                                            : 0,
+                                        Math.round(
+                                            (Number.isFinite(value)
+                                                ? value
+                                                : 0) * 100,
+                                        ) / 100,
                                     ),
 
                                 counted:
@@ -1091,7 +1082,7 @@ function WidthCells({
                 <input
                     type="number"
                     min="0"
-                    step="0.1"
+                    step="0.01"
                     value={
                         row.actualQuantity
                     }

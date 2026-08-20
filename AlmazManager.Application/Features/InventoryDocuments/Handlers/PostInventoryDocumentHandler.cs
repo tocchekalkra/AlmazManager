@@ -27,13 +27,17 @@ public sealed class PostInventoryDocumentHandler
     private readonly ICurrentUserService
         _currentUserService;
 
+    private readonly IStockNotificationService
+        _stockNotificationService;
+
     public PostInventoryDocumentHandler(
         IInventoryDocumentRepository documentRepository,
         IMaterialRepository materialRepository,
         IStockRepository stockRepository,
         IOperationRepository operationRepository,
         ICategoryAccessService categoryAccessService,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        IStockNotificationService stockNotificationService)
     {
         _documentRepository =
             documentRepository;
@@ -52,6 +56,8 @@ public sealed class PostInventoryDocumentHandler
 
         _currentUserService =
             currentUserService;
+
+        _stockNotificationService = stockNotificationService;
     }
 
     public async Task<InventoryDocumentResponse>
@@ -87,6 +93,8 @@ public sealed class PostInventoryDocumentHandler
          * ничего не меняем,
          * только проверяем весь документ.
          */
+        var materialsById = new Dictionary<Guid, Material>();
+
         foreach (var item in document.Items)
         {
             var material =
@@ -104,6 +112,15 @@ public sealed class PostInventoryDocumentHandler
             {
                 throw new InvalidOperationException(
                     $"Материал '{material.Name}' находится в архиве.");
+            }
+
+            materialsById[material.Id] = material;
+
+            if (material.Kind == MaterialKind.Standard &&
+                item.ActualQuantity != decimal.Truncate(item.ActualQuantity))
+            {
+                throw new InvalidOperationException(
+                    $"Для материала '{material.Name}' количество должно быть целым.");
             }
 
             var permission =
@@ -141,6 +158,8 @@ public sealed class PostInventoryDocumentHandler
          * Второй проход:
          * применяем фактические остатки.
          */
+        var stockChanges = new List<(Material Material, decimal Before, decimal After)>();
+
         foreach (var item in document.Items)
         {
             var stock =
@@ -193,12 +212,22 @@ public sealed class PostInventoryDocumentHandler
             await _operationRepository
                 .AddAsync(
                     operation);
+
+            stockChanges.Add((materialsById[item.MaterialId], before, stock.Quantity));
         }
 
         document.Post();
 
         await _documentRepository
             .SaveChangesAsync();
+
+        foreach (var change in stockChanges)
+        {
+            await _stockNotificationService.HandleStockChangeAsync(
+                change.Material,
+                change.Before,
+                change.After);
+        }
 
         return await InventoryDocumentMapper
             .MapAsync(

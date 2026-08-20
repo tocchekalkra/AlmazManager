@@ -1,4 +1,6 @@
-﻿using AlmazManager.Contracts.Responses.Documents;
+﻿using AlmazManager.Application.Interfaces;
+using AlmazManager.Application.Security;
+using AlmazManager.Contracts.Responses.Documents;
 using AlmazManager.Domain.Entities;
 using AlmazManager.Domain.Enums;
 using AlmazManager.Domain.Interfaces;
@@ -19,11 +21,27 @@ public sealed class CancelWarehouseDocumentHandler
     private readonly IOperationRepository
         _operationRepository;
 
+    private readonly ICurrentUserService
+        _currentUserService;
+
+    private readonly ISystemAccessService
+        _systemAccessService;
+
+    private readonly ISupplyInvoiceRepository
+        _supplyInvoiceRepository;
+
+    private readonly IStockNotificationService
+        _stockNotificationService;
+
     public CancelWarehouseDocumentHandler(
         IWarehouseDocumentRepository documentRepository,
         IMaterialRepository materialRepository,
         IStockRepository stockRepository,
-        IOperationRepository operationRepository)
+        IOperationRepository operationRepository,
+        ICurrentUserService currentUserService,
+        ISystemAccessService systemAccessService,
+        ISupplyInvoiceRepository supplyInvoiceRepository,
+        IStockNotificationService stockNotificationService)
     {
         _documentRepository =
             documentRepository;
@@ -36,12 +54,21 @@ public sealed class CancelWarehouseDocumentHandler
 
         _operationRepository =
             operationRepository;
+
+        _currentUserService =
+            currentUserService;
+
+        _systemAccessService = systemAccessService;
+        _supplyInvoiceRepository = supplyInvoiceRepository;
+        _stockNotificationService = stockNotificationService;
     }
 
     public async Task<WarehouseDocumentResponse>
         HandleAsync(
             Guid documentId)
     {
+        await _systemAccessService.EnsureAccessAsync(SystemPermission.CancelDocuments);
+
         var document =
             await _documentRepository
                 .GetByIdAsync(
@@ -65,6 +92,8 @@ public sealed class CancelWarehouseDocumentHandler
                 .GetByDocumentIdAsync(
                     document.Id);
 
+        var materialsById = new Dictionary<Guid, Material>();
+
         foreach (var item in document.Items)
         {
             var material =
@@ -77,6 +106,8 @@ public sealed class CancelWarehouseDocumentHandler
                 throw new InvalidOperationException(
                     "Материал не найден.");
             }
+
+            materialsById[material.Id] = material;
 
             var stock =
                 await _stockRepository
@@ -102,6 +133,16 @@ public sealed class CancelWarehouseDocumentHandler
                     $"а требуется вернуть {item.Quantity}.");
             }
         }
+
+        SupplyInvoice? supplyInvoice = null;
+
+        if (document.SupplyInvoiceId.HasValue)
+        {
+            supplyInvoice = await _supplyInvoiceRepository.GetByIdAsync(document.SupplyInvoiceId.Value)
+                ?? throw new InvalidOperationException("Связанный счёт не найден.");
+        }
+
+        var stockChanges = new List<(Material Material, decimal Before, decimal After)>();
 
         foreach (var item in document.Items)
         {
@@ -168,7 +209,7 @@ public sealed class CancelWarehouseDocumentHandler
                     quantityBefore,
                     quantityChange,
                     quantityAfter,
-                    document.UserId,
+                    _currentUserService.UserId,
                     document.Id,
                     true,
                     originalOperation?.Id,
@@ -178,12 +219,25 @@ public sealed class CancelWarehouseDocumentHandler
             await _operationRepository
                 .AddAsync(
                     reversalOperation);
+
+            stockChanges.Add((materialsById[item.MaterialId], quantityBefore, quantityAfter));
+
+            if (supplyInvoice is not null)
+                supplyInvoice.ReverseReceipt(item.MaterialId, item.Quantity);
         }
 
         document.Cancel();
 
         await _documentRepository
             .SaveChangesAsync();
+
+        foreach (var change in stockChanges)
+        {
+            await _stockNotificationService.HandleStockChangeAsync(
+                change.Material,
+                change.Before,
+                change.After);
+        }
 
         return Map(document);
     }
@@ -210,8 +264,12 @@ public sealed class CancelWarehouseDocumentHandler
             document.Type.ToString(),
             document.Status.ToString(),
             document.UserId,
+            document.SequenceNumber,
+            document.DocumentDate,
+            document.SupplyInvoiceId,
             document.Supplier,
             document.ExternalNumber,
+            document.Recipient,
             document.Comment,
             document.CreatedAtUtc,
             document.PostedAtUtc,

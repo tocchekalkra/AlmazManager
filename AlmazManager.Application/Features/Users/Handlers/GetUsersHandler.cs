@@ -31,7 +31,13 @@ public sealed class GetUsersHandler
                         user.Login,
                         user.Role.ToString(),
                         user.IsActive,
-                        user.CreatedAtUtc))
+                        user.CreatedAtUtc,
+                        user.CanManageMaterials,
+                        user.CanArchiveMaterials,
+                        user.CanRestoreMaterials,
+                        user.CanPermanentlyDeleteMaterials,
+                        user.CanCancelDocuments,
+                        user.CanManageSupplies))
             .ToList();
     }
 }

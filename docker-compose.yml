@@ -3,19 +3,14 @@ version: '3.9'
 services:
   postgres:
     image: postgres:17
-
     container_name: warehouse_postgres
-
     restart: always
-
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: warehouse_manager
-
+      POSTGRES_USER: ${ALMAZ_DB_USER:-almazmanager}
+      POSTGRES_PASSWORD: ${ALMAZ_DB_PASSWORD:?Set ALMAZ_DB_PASSWORD in .env}
+      POSTGRES_DB: ${ALMAZ_DB_NAME:-almazmanager}
     ports:
       - "5432:5432"
-
     volumes:
       - postgres_data:/var/lib/postgresql/data
 

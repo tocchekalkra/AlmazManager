@@ -6,4 +6,10 @@ public sealed record UserResponse(
     string Login,
     string Role,
     bool IsActive,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    bool CanManageMaterials,
+    bool CanArchiveMaterials,
+    bool CanRestoreMaterials,
+    bool CanPermanentlyDeleteMaterials,
+    bool CanCancelDocuments,
+    bool CanManageSupplies);

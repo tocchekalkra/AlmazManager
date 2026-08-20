@@ -126,6 +126,13 @@ public sealed class CreateInventoryDocumentHandler
                     $"Материал '{material.Name}' находится в архиве.");
             }
 
+            if (material.Kind == MaterialKind.Standard &&
+                item.ActualQuantity != decimal.Truncate(item.ActualQuantity))
+            {
+                throw new ArgumentException(
+                    $"Для материала '{material.Name}' количество должно быть целым.");
+            }
+
             /*
              * Для ORACAL используется отдельное право.
              * Для остальных материалов —

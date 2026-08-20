@@ -25,6 +25,14 @@ public sealed class UserCategoryAccessRepository
             .ToListAsync();
     }
 
+    public async Task<List<UserCategoryAccess>>
+        GetByCategoryIdAsync(Guid categoryId)
+    {
+        return await _db.UserCategoryAccesses
+            .Where(x => x.CategoryId == categoryId)
+            .ToListAsync();
+    }
+
     public async Task<UserCategoryAccess?>
         GetByUserAndCategoryAsync(
             Guid userId,

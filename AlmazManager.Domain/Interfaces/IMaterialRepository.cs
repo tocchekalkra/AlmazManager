@@ -14,6 +14,10 @@ public interface IMaterialRepository
 
     Task<List<Material>> GetAllAsync();
 
+    Task<bool> HasAnyDependenciesAsync(Guid materialId);
+
+    Task<int> CountOpenSupplyLinksAsync(Guid materialId);
+
     Task AddAsync(Material material);
 
     Task UpdateAsync(Material material);

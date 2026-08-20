@@ -5,13 +5,17 @@ public sealed record MaterialCatalogItemResponse(
     string Name,
     string Article,
     Guid CategoryId,
+    string CategoryName,
     string Unit,
     decimal MinimumQuantity,
     decimal CurrentQuantity,
+    decimal ExpectedQuantity,
     bool BelowMinimum,
     bool IsActive,
     string Kind,
     decimal? WidthMeters,
     string? ColorCode,
     string? ColorName,
-    string? ColorHex);
+    string? ColorHex,
+    string? MachineName,
+    decimal? PackageLiters);

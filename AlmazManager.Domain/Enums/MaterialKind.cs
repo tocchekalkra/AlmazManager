@@ -3,5 +3,6 @@
 public enum MaterialKind
 {
     Standard = 1,
-    Oracal641 = 2
+    Oracal641 = 2,
+    Ink = 3
 }

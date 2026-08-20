@@ -5,11 +5,13 @@ import {
 } from 'react-router-dom';
 
 import ProtectedRoute from './auth/ProtectedRoute';
+import AuthorizationRoute from './auth/AuthorizationRoute';
 
 import AppLayout from './components/layout/AppLayout';
 
 import CategoriesPage from './pages/CategoriesPage';
 import DashboardPage from './pages/DashboardPage';
+import ConsumptionPage from './pages/ConsumptionPage';
 import DocumentsPage from './pages/DocumentsPage';
 import InventoryPage from './pages/InventoryPage';
 import IssuePage from './pages/IssuePage';
@@ -20,6 +22,7 @@ import OracalInventoryPage from './pages/OracalInventoryPage';
 import ReceivingPage from './pages/ReceivingPage';
 import SettingsPage from './pages/SettingsPage';
 import StockPage from './pages/StockPage';
+import SuppliesPage from './pages/SuppliesPage';
 import UsersPage from './pages/UsersPage';
 
 export default function App() {
@@ -43,14 +46,21 @@ export default function App() {
                     />
 
                     <Route
+                        path="/consumption"
+                        element={<ConsumptionPage />}
+                    />
+
+                    <Route
                         path="/materials"
                         element={<MaterialsPage />}
                     />
 
-                    <Route
-                        path="/categories"
-                        element={<CategoriesPage />}
-                    />
+                    <Route element={<AuthorizationRoute administratorOnly />}>
+                        <Route
+                            path="/categories"
+                            element={<CategoriesPage />}
+                        />
+                    </Route>
 
                     <Route
                         path="/receiving"
@@ -63,14 +73,30 @@ export default function App() {
                     />
 
                     <Route
-                        path="/inventory"
-                        element={<InventoryPage />}
-                    />
+                        element={
+                            <AuthorizationRoute
+                                permission="canInventoryStandard"
+                            />
+                        }
+                    >
+                        <Route
+                            path="/inventory"
+                            element={<InventoryPage />}
+                        />
+                    </Route>
 
                     <Route
-                        path="/inventory/oracal"
-                        element={<OracalInventoryPage />}
-                    />
+                        element={
+                            <AuthorizationRoute
+                                permission="canInventoryOracal"
+                            />
+                        }
+                    >
+                        <Route
+                            path="/inventory/oracal"
+                            element={<OracalInventoryPage />}
+                        />
+                    </Route>
 
                     <Route
                         path="/documents"
@@ -82,15 +108,22 @@ export default function App() {
                         element={<OperationsPage />}
                     />
 
-                    <Route
-                        path="/users"
-                        element={<UsersPage />}
-                    />
+                    <Route element={<AuthorizationRoute permission="canManageSupplies" />}>
+                        <Route path="/supplies" element={<SuppliesPage />} />
+                    </Route>
 
                     <Route
                         path="/settings"
                         element={<SettingsPage />}
                     />
+
+                    <Route element={<AuthorizationRoute administratorOnly />}>
+                        <Route
+                            path="/users"
+                            element={<UsersPage />}
+                        />
+
+                    </Route>
                 </Route>
             </Route>
 

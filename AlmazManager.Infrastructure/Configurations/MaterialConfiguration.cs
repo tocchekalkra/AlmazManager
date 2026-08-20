@@ -51,6 +51,14 @@ public sealed class MaterialConfiguration :
             .HasMaxLength(7)
             .IsRequired(false);
 
+        builder.Property(x => x.MachineName)
+            .HasMaxLength(150)
+            .IsRequired(false);
+
+        builder.Property(x => x.PackageLiters)
+            .HasPrecision(5, 2)
+            .IsRequired(false);
+
         builder.Property(x => x.IsActive)
             .IsRequired();
 
@@ -65,6 +73,8 @@ public sealed class MaterialConfiguration :
         builder.HasIndex(x => x.CategoryId);
 
         builder.HasIndex(x => x.Kind);
+
+        builder.HasIndex(x => new { x.Kind, x.MachineName, x.ColorName, x.PackageLiters });
 
         builder.HasIndex(x => new
         {

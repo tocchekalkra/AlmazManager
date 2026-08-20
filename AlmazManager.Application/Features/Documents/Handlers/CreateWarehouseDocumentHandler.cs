@@ -131,6 +131,13 @@ public sealed class CreateWarehouseDocumentHandler
                     $"Материал '{material.Name}' находится в архиве.");
             }
 
+            if (material.Kind == MaterialKind.Standard &&
+                item.Quantity != decimal.Truncate(item.Quantity))
+            {
+                throw new ArgumentException(
+                    $"Для материала '{material.Name}' количество должно быть целым.");
+            }
+
             var permission =
                 type ==
                 WarehouseDocumentType.Receiving
@@ -143,16 +150,16 @@ public sealed class CreateWarehouseDocumentHandler
                     permission);
         }
 
-        var number =
-            GenerateDocumentNumber(type);
-
         var document =
             new WarehouseDocument(
-                number,
+                $"Черновик-{Guid.NewGuid():N}",
                 type,
                 currentUserId,
+                command.DocumentDate,
+                command.SupplyInvoiceId,
                 command.Supplier,
                 command.ExternalNumber,
+                command.Recipient,
                 command.Comment);
 
         foreach (var item in command.Items)
@@ -171,31 +178,6 @@ public sealed class CreateWarehouseDocumentHandler
         return Map(document);
     }
 
-    private static string GenerateDocumentNumber(
-        WarehouseDocumentType type)
-    {
-        var prefix =
-            type switch
-            {
-                WarehouseDocumentType.Receiving =>
-                    "RCV",
-
-                WarehouseDocumentType.Issue =>
-                    "ISS",
-
-                _ =>
-                    "DOC"
-            };
-
-        var suffix =
-            Guid.NewGuid()
-                .ToString("N")[..6]
-                .ToUpperInvariant();
-
-        return
-            $"{prefix}-{DateTime.UtcNow:yyyyMMddHHmmss}-{suffix}";
-    }
-
     private static WarehouseDocumentResponse Map(
         WarehouseDocument document)
     {
@@ -205,8 +187,12 @@ public sealed class CreateWarehouseDocumentHandler
             document.Type.ToString(),
             document.Status.ToString(),
             document.UserId,
+            document.SequenceNumber,
+            document.DocumentDate,
+            document.SupplyInvoiceId,
             document.Supplier,
             document.ExternalNumber,
+            document.Recipient,
             document.Comment,
             document.CreatedAtUtc,
             document.PostedAtUtc,

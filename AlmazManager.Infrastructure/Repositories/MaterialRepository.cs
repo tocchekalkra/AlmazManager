@@ -2,6 +2,7 @@
 using AlmazManager.Domain.Entities;
 using AlmazManager.Domain.Interfaces;
 using AlmazManager.Infrastructure.Database;
+using AlmazManager.Domain.Enums;
 
 namespace AlmazManager.Infrastructure.Repositories;
 
@@ -50,6 +51,30 @@ public sealed class MaterialRepository :
         return await _db.Materials
             .OrderBy(x => x.Name)
             .ToListAsync();
+    }
+
+    public async Task<bool> HasAnyDependenciesAsync(Guid materialId)
+    {
+        return
+            await _db.Operations.AnyAsync(x => x.MaterialId == materialId)
+            || await _db.WarehouseDocumentItems.AnyAsync(x => x.MaterialId == materialId)
+            || await _db.InventoryDocumentItems.AnyAsync(x => x.MaterialId == materialId)
+            || await _db.SupplyInvoiceItems.AnyAsync(x => x.MaterialId == materialId);
+    }
+
+    public async Task<int> CountOpenSupplyLinksAsync(Guid materialId)
+    {
+        return await _db.SupplyInvoiceItems
+            .Where(item => item.MaterialId == materialId)
+            .Join(
+                _db.SupplyInvoices,
+                item => item.SupplyInvoiceId,
+                invoice => invoice.Id,
+                (item, invoice) => new { item, invoice })
+            .CountAsync(x =>
+                x.invoice.Status != SupplyInvoiceStatus.FullyReceived &&
+                x.invoice.Status != SupplyInvoiceStatus.Cancelled &&
+                x.item.ReceivedQuantity < x.item.ExpectedQuantity);
     }
 
     public async Task AddAsync(

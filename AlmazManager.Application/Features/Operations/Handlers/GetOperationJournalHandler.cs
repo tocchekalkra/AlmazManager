@@ -1,4 +1,7 @@
-﻿using AlmazManager.Contracts.Requests.Operations;
+﻿using AlmazManager.Application.Interfaces;
+using AlmazManager.Application.Services;
+using AlmazManager.Application.Security;
+using AlmazManager.Contracts.Requests.Operations;
 using AlmazManager.Contracts.Responses.Operations;
 using AlmazManager.Domain.Entities;
 using AlmazManager.Domain.Enums;
@@ -12,17 +15,23 @@ public sealed class GetOperationJournalHandler
     private readonly IMaterialRepository _materialRepository;
     private readonly IUserRepository _userRepository;
     private readonly IWarehouseDocumentRepository _documentRepository;
+    private readonly IInventoryDocumentRepository _inventoryDocumentRepository;
+    private readonly ICategoryAccessService _categoryAccessService;
 
     public GetOperationJournalHandler(
         IOperationRepository operationRepository,
         IMaterialRepository materialRepository,
         IUserRepository userRepository,
-        IWarehouseDocumentRepository documentRepository)
+        IWarehouseDocumentRepository documentRepository,
+        IInventoryDocumentRepository inventoryDocumentRepository,
+        ICategoryAccessService categoryAccessService)
     {
         _operationRepository = operationRepository;
         _materialRepository = materialRepository;
         _userRepository = userRepository;
         _documentRepository = documentRepository;
+        _inventoryDocumentRepository = inventoryDocumentRepository;
+        _categoryAccessService = categoryAccessService;
     }
 
     public async Task<OperationJournalResponse> HandleAsync(
@@ -53,14 +62,44 @@ public sealed class GetOperationJournalHandler
         var documents =
             await _documentRepository.GetAllAsync();
 
+        var inventoryDocuments =
+            await _inventoryDocumentRepository.GetAllAsync();
+
+        var allowedCategoryIds =
+            await _categoryAccessService.GetAllowedCategoryIdsAsync(
+                CategoryPermission.View);
+
+        if (allowedCategoryIds is not null)
+        {
+            materials = materials
+                .Where(material =>
+                    allowedCategoryIds.Contains(material.CategoryId))
+                .ToList();
+
+            var visibleMaterialIds = materials
+                .Select(material => material.Id)
+                .ToHashSet();
+
+            operations = operations
+                .Where(operation =>
+                    visibleMaterialIds.Contains(operation.MaterialId))
+                .ToList();
+        }
+
         var materialById =
             materials.ToDictionary(x => x.Id);
 
         var userById =
             users.ToDictionary(x => x.Id);
 
-        var documentById =
-            documents.ToDictionary(x => x.Id);
+        var documentNumberById =
+            documents.ToDictionary(x => x.Id, x => x.Number);
+
+        foreach (var inventoryDocument in inventoryDocuments)
+        {
+            documentNumberById[inventoryDocument.Id] =
+                inventoryDocument.Number;
+        }
 
         var query = operations.AsEnumerable();
 
@@ -69,6 +108,18 @@ public sealed class GetOperationJournalHandler
             query = query.Where(x =>
                 x.MaterialId ==
                 request.MaterialId.Value);
+        }
+
+        if (request.CategoryId.HasValue)
+        {
+            var materialIdsInCategory = materials
+                .Where(material =>
+                    material.CategoryId == request.CategoryId.Value)
+                .Select(material => material.Id)
+                .ToHashSet();
+
+            query = query.Where(operation =>
+                materialIdsInCategory.Contains(operation.MaterialId));
         }
 
         if (request.DocumentId.HasValue)
@@ -138,13 +189,13 @@ public sealed class GetOperationJournalHandler
                     operation.UserId,
                     out var user);
 
-                WarehouseDocument? document = null;
+                string? documentNumber = null;
 
                 if (operation.DocumentId.HasValue)
                 {
-                    documentById.TryGetValue(
+                    documentNumberById.TryGetValue(
                         operation.DocumentId.Value,
-                        out document);
+                        out documentNumber);
                 }
 
                 return
@@ -168,7 +219,7 @@ public sealed class GetOperationJournalHandler
                         StringComparison.OrdinalIgnoreCase)
                     == true
                     ||
-                    document?.Number.Contains(
+                    documentNumber?.Contains(
                         search,
                         StringComparison.OrdinalIgnoreCase)
                     == true
@@ -209,7 +260,7 @@ public sealed class GetOperationJournalHandler
                     operation,
                     materialById,
                     userById,
-                    documentById))
+                    documentNumberById))
             .ToList();
 
         return new OperationJournalResponse(
@@ -240,18 +291,41 @@ public sealed class GetOperationJournalHandler
         var documents =
             await _documentRepository.GetAllAsync();
 
+        var inventoryDocuments =
+            await _inventoryDocumentRepository.GetAllAsync();
+
+        var material =
+            materials.FirstOrDefault(x => x.Id == operation.MaterialId);
+
+        if (material is null ||
+            !await _categoryAccessService.HasAccessAsync(
+                material.CategoryId,
+                CategoryPermission.View))
+        {
+            return null;
+        }
+
+        var documentNumbers =
+            documents.ToDictionary(x => x.Id, x => x.Number);
+
+        foreach (var inventoryDocument in inventoryDocuments)
+        {
+            documentNumbers[inventoryDocument.Id] =
+                inventoryDocument.Number;
+        }
+
         return Map(
             operation,
             materials.ToDictionary(x => x.Id),
             users.ToDictionary(x => x.Id),
-            documents.ToDictionary(x => x.Id));
+            documentNumbers);
     }
 
     private static OperationJournalItemResponse Map(
         Operation operation,
         Dictionary<Guid, Material> materials,
         Dictionary<Guid, AppUser> users,
-        Dictionary<Guid, WarehouseDocument> documents)
+        Dictionary<Guid, string> documentNumbers)
     {
         materials.TryGetValue(
             operation.MaterialId,
@@ -261,19 +335,21 @@ public sealed class GetOperationJournalHandler
             operation.UserId,
             out var user);
 
-        WarehouseDocument? document = null;
+        string? documentNumber = null;
 
         if (operation.DocumentId.HasValue)
         {
-            documents.TryGetValue(
+            documentNumbers.TryGetValue(
                 operation.DocumentId.Value,
-                out document);
+                out documentNumber);
         }
 
         return new OperationJournalItemResponse(
             operation.Id,
             operation.MaterialId,
-            material?.Name ?? "Неизвестный материал",
+            material is null
+                ? "Неизвестный материал"
+                : MaterialDisplayName.Format(material),
             material?.Article ?? "—",
             operation.Type.ToString(),
             GetDisplayType(operation),
@@ -286,7 +362,7 @@ public sealed class GetOperationJournalHandler
             user?.Login ??
             "Неизвестный пользователь",
             operation.DocumentId,
-            document?.Number,
+            documentNumber,
             operation.IsReversal,
             operation.ReversedOperationId,
             operation.CreatedAtUtc,
@@ -321,6 +397,12 @@ public sealed class GetOperationJournalHandler
 
             OperationType.Inventory =>
                 "Инвентаризация",
+
+            OperationType.MaterialArchived =>
+                "Материал перемещён в архив",
+
+            OperationType.MaterialRestored =>
+                "Материал восстановлен",
 
             _ =>
                 operation.Type.ToString()

@@ -8,6 +8,7 @@ import {
 import {
     ArrowUpFromLine,
     CheckCircle2,
+    FileText,
     Minus,
     Package,
     Palette,
@@ -18,12 +19,16 @@ import {
 } from 'lucide-react';
 
 import api from '../api/api';
+import { loadAllMaterialCatalogItems } from '../api/catalog';
+import { filmMarkerText } from '../utils/material';
+import { useNavigate } from 'react-router-dom';
 
 type MaterialCatalogItem = {
     id: string;
     name: string;
     article: string;
     categoryId: string;
+    categoryName: string;
     unit: string;
 
     minimumQuantity: number;
@@ -39,14 +44,14 @@ type MaterialCatalogItem = {
     colorCode?: string | null;
     colorName?: string | null;
     colorHex?: string | null;
+    machineName?: string | null;
+    packageLiters?: number | null;
 };
 
-type MaterialCatalogResponse = {
-    page: number;
-    pageSize: number;
-    totalCount: number;
-    totalPages: number;
-    items: MaterialCatalogItem[];
+type Category = {
+    id: string;
+    name: string;
+    isActive: boolean;
 };
 
 type IssueLine = {
@@ -54,6 +59,7 @@ type IssueLine = {
 
     name: string;
     article: string;
+    categoryName: string;
 
     kind: string;
 
@@ -62,6 +68,8 @@ type IssueLine = {
     colorCode?: string | null;
     colorName?: string | null;
     colorHex?: string | null;
+    machineName?: string | null;
+    packageLiters?: number | null;
 
     currentQuantity: number;
     quantity: number;
@@ -77,15 +85,20 @@ type WarehouseDocumentResponse = {
 
     supplier?: string | null;
     externalNumber?: string | null;
+    recipient?: string | null;
     comment?: string | null;
 
     createdAtUtc: string;
     postedAtUtc?: string | null;
     cancelledAtUtc?: string | null;
+    items?: Array<{ materialId: string; quantity: number }>;
 };
 
 type StandardGroup = {
+    key: string;
     name: string;
+    categoryId: string;
+    categoryName: string;
     materials: MaterialCatalogItem[];
 };
 
@@ -102,8 +115,12 @@ const numberFormatter =
     });
 
 export default function IssuePage() {
+    const navigate = useNavigate();
     const [materials, setMaterials] =
         useState<MaterialCatalogItem[]>([]);
+
+    const [categories, setCategories] =
+        useState<Category[]>([]);
 
     const [loading, setLoading] =
         useState(true);
@@ -119,6 +136,9 @@ export default function IssuePage() {
 
     const [comment, setComment] =
         useState('');
+
+    const [recipient, setRecipient] = useState('');
+    const [recentIssues, setRecentIssues] = useState<WarehouseDocumentResponse[]>([]);
 
     const [materialMode, setMaterialMode] =
         useState<
@@ -151,24 +171,39 @@ export default function IssuePage() {
 
     useEffect(() => {
         loadMaterials();
+        void loadRecentIssues();
     }, []);
+
+    async function loadRecentIssues() {
+        try {
+            const response = await api.get<WarehouseDocumentResponse[]>('/documents');
+            setRecentIssues((response.data ?? [])
+                .filter((document) => document.type === 'Issue' && document.status === 'Posted')
+                .sort((a, b) => new Date(b.postedAtUtc ?? b.createdAtUtc).getTime() - new Date(a.postedAtUtc ?? a.createdAtUtc).getTime())
+                .slice(0, 3));
+        } catch {
+            // История не блокирует проведение расхода.
+        }
+    }
 
     async function loadMaterials() {
         try {
             setLoading(true);
             setError('');
 
-            const response =
-                await api.get<MaterialCatalogResponse>(
-                    '/materials/catalog?pageSize=100',
-                );
+            const [items, categoryResponse] =
+                await Promise.all([
+                    loadAllMaterialCatalogItems<MaterialCatalogItem>(),
+                    api.get<Category[]>('/categories'),
+                ]);
 
             setMaterials(
-                response.data.items.filter(
+                items.filter(
                     material =>
                         material.isActive,
                 ),
             );
+            setCategories(categoryResponse.data ?? []);
         } catch (
         requestError: any
         ) {
@@ -213,6 +248,9 @@ export default function IssuePage() {
 
     const standardGroups =
         useMemo(() => {
+            const categoryMap = new Map(
+                categories.map(category => [category.id, category.name]),
+            );
             const map =
                 new Map<
                     string,
@@ -223,17 +261,19 @@ export default function IssuePage() {
                 const material of
                 standardMaterials
             ) {
-                const name =
-                    normalizeMaterialGroupName(
-                        material.name,
-                    );
+                const name = material.kind === 'Ink'
+                    ? (material.machineName?.trim() || 'Без станка')
+                    : normalizeMaterialGroupName(material.name);
 
                 const key =
-                    name.toLowerCase();
+                    `${material.categoryId}::${name.toLowerCase()}`;
 
                 const group =
                     map.get(key) ?? {
+                        key,
                         name,
+                        categoryId: material.categoryId,
+                        categoryName: categoryMap.get(material.categoryId) ?? 'Без категории',
                         materials: [],
                     };
 
@@ -258,24 +298,26 @@ export default function IssuePage() {
                             .slice()
                             .sort(
                                 (a, b) =>
-                                    Number(
-                                        b.widthMeters ??
-                                        0,
-                                    ) -
-                                    Number(
-                                        a.widthMeters ??
-                                        0,
-                                    ),
+                                    a.kind === 'Ink'
+                                        ? inkColorOrder(a.colorName) - inkColorOrder(b.colorName) || Number(a.packageLiters ?? 0) - Number(b.packageLiters ?? 0)
+                                        : Number(b.widthMeters ?? 0) - Number(a.widthMeters ?? 0),
                             ),
-                }))
-                .sort(
-                    (a, b) =>
-                        a.name.localeCompare(
-                            b.name,
-                            'ru',
-                        ),
-                );
-        }, [standardMaterials]);
+                }));
+        }, [standardMaterials, categories]);
+
+    const standardGroupsByCategory = useMemo(() => {
+        const map = new Map<string, { id: string; name: string; groups: StandardGroup[] }>();
+        for (const group of standardGroups) {
+            const category = map.get(group.categoryId) ?? {
+                id: group.categoryId,
+                name: group.categoryName,
+                groups: [],
+            };
+            category.groups.push(group);
+            map.set(group.categoryId, category);
+        }
+        return [...map.values()];
+    }, [standardGroups]);
 
     const oracalGroups =
         useMemo(() => {
@@ -334,11 +376,11 @@ export default function IssuePage() {
                             .sort(
                                 (a, b) =>
                                     Number(
-                                        a.widthMeters ??
+                                        b.widthMeters ??
                                         0,
                                     ) -
                                     Number(
-                                        b.widthMeters ??
+                                        a.widthMeters ??
                                         0,
                                     ),
                             ),
@@ -358,7 +400,7 @@ export default function IssuePage() {
     const selectedStandardGroup =
         standardGroups.find(
             group =>
-                group.name ===
+                group.key ===
                 selectedGroupName,
         );
 
@@ -461,17 +503,17 @@ export default function IssuePage() {
     }
 
     function selectStandardGroup(
-        groupName: string,
+        groupKey: string,
     ) {
         setSelectedGroupName(
-            groupName,
+            groupKey,
         );
 
         const group =
             standardGroups.find(
                 item =>
-                    item.name ===
-                    groupName,
+                    item.key ===
+                    groupKey,
             );
 
         const firstAvailable =
@@ -586,7 +628,7 @@ export default function IssuePage() {
             return;
         }
 
-        const parsedQuantity =
+        let parsedQuantity =
             Number(
                 quantity.replace(
                     ',',
@@ -608,8 +650,7 @@ export default function IssuePage() {
         }
 
         if (
-            selectedMaterial.kind !==
-            'Oracal641' &&
+            selectedMaterial.kind === 'Standard' &&
             !Number.isInteger(
                 parsedQuantity,
             )
@@ -619,6 +660,12 @@ export default function IssuePage() {
             );
 
             return;
+        }
+
+        if (selectedMaterial.kind === 'Oracal641') {
+            parsedQuantity = Math.round(parsedQuantity * 100) / 100;
+        } else if (selectedMaterial.kind === 'Ink') {
+            parsedQuantity = Math.round(parsedQuantity * 10) / 10;
         }
 
         const alreadyAdded =
@@ -641,11 +688,7 @@ export default function IssuePage() {
                         availableBeforeDocument -
                         alreadyAdded,
                     ),
-                )} ${selectedMaterial.kind ===
-                    'Oracal641'
-                    ? 'м'
-                    : 'шт.'
-                }.`,
+                )} ${quantityUnit(selectedMaterial.kind)}.`,
             );
 
             return;
@@ -694,6 +737,9 @@ export default function IssuePage() {
                         article:
                             selectedMaterial.article,
 
+                        categoryName:
+                            selectedMaterial.categoryName,
+
                         kind:
                             selectedMaterial.kind,
 
@@ -708,6 +754,9 @@ export default function IssuePage() {
 
                         colorHex:
                             selectedMaterial.colorHex,
+
+                        machineName: selectedMaterial.machineName,
+                        packageLiters: selectedMaterial.packageLiters,
 
                         currentQuantity:
                             selectedMaterial.currentQuantity,
@@ -755,21 +804,22 @@ export default function IssuePage() {
             nextQuantity;
 
         if (
-            line.kind !==
-            'Oracal641'
+            line.kind === 'Standard'
         ) {
             normalized =
                 Math.round(
                     normalized,
                 );
+        } else if (line.kind === 'Oracal641') {
+            normalized =
+                Math.round(normalized * 100) / 100;
+        } else {
+            normalized = Math.round(normalized * 10) / 10;
         }
 
         normalized =
             Math.max(
-                line.kind ===
-                    'Oracal641'
-                    ? 0.1
-                    : 1,
+                line.kind === 'Oracal641' ? 0.01 : line.kind === 'Ink' ? 0.1 : 1,
                 normalized,
             );
 
@@ -860,11 +910,17 @@ export default function IssuePage() {
                         type:
                             'Issue',
 
+                        documentDate: new Date().toISOString().slice(0, 10),
+
+                        supplyInvoiceId: null,
+
                         supplier:
                             null,
 
                         externalNumber:
                             null,
+
+                        recipient: recipient.trim() || null,
 
                         comment:
                             comment.trim() ||
@@ -896,6 +952,7 @@ export default function IssuePage() {
             );
 
             setComment('');
+            setRecipient('');
             setLines([]);
             setSearch('');
 
@@ -905,6 +962,7 @@ export default function IssuePage() {
             setQuantity('1');
 
             await loadMaterials();
+            await loadRecentIssues();
         } catch (
         requestError: any
         ) {
@@ -1004,6 +1062,16 @@ export default function IssuePage() {
                         styles.commentArea
                     }
                 >
+                    <label style={styles.field}>
+                        <span>Получатель или объект</span>
+                        <input
+                            value={recipient}
+                            onChange={event => setRecipient(event.target.value)}
+                            placeholder="Например: монтажная бригада · объект на Ленина"
+                            style={styles.input}
+                        />
+                    </label>
+
                     <label
                         style={
                             styles.field
@@ -1132,7 +1200,7 @@ export default function IssuePage() {
                                     }
                                 >
                                     <span>
-                                        Материал
+                                        Материал / станок
                                     </span>
 
                                     <select
@@ -1155,22 +1223,15 @@ export default function IssuePage() {
                                             Выберите материал
                                         </option>
 
-                                        {standardGroups.map(
-                                            group => (
-                                                <option
-                                                    key={
-                                                        group.name
-                                                    }
-                                                    value={
-                                                        group.name
-                                                    }
-                                                >
-                                                    {
-                                                        group.name
-                                                    }
-                                                </option>
-                                            ),
-                                        )}
+                                        {standardGroupsByCategory.map(category => (
+                                            <optgroup key={category.id} label={category.name}>
+                                                {category.groups.map(group => (
+                                                    <option key={group.key} value={group.key}>
+                                                        {group.name}
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+                                        ))}
                                     </select>
                                 </label>
 
@@ -1180,7 +1241,7 @@ export default function IssuePage() {
                                     }
                                 >
                                     <span>
-                                        Ширина
+                                        {selectedStandardGroup?.materials[0]?.kind === 'Ink' ? 'Цвет' : 'Ширина'}
                                     </span>
 
                                     <select
@@ -1226,11 +1287,12 @@ export default function IssuePage() {
                                                                 material.id
                                                             }
                                                         >
-                                                            {material.widthMeters
-                                                                ? formatWidth(
-                                                                    material.widthMeters,
-                                                                )
-                                                                : 'Без ширины'}
+                                                            {material.kind === 'Ink'
+                                                                ? `${material.colorName ?? 'Без цвета'} · ${material.packageLiters ?? '—'} л`
+                                                                : material.widthMeters ? formatWidth(material.widthMeters) : 'Без ширины'}
+                                                            {filmMarkerText(material.categoryName)
+                                                                ? ` · ${filmMarkerText(material.categoryName)}`
+                                                                : ''}
                                                             {' · '}
                                                             доступно{' '}
                                                             {numberFormatter.format(
@@ -1403,6 +1465,9 @@ export default function IssuePage() {
                                     </button>
 
                                     <input
+                                        type="number"
+                                        min="0.01"
+                                        step="0.01"
                                         value={
                                             quantity
                                         }
@@ -1536,10 +1601,7 @@ export default function IssuePage() {
                                 {numberFormatter.format(
                                     selectedMaterial.currentQuantity,
                                 )}{' '}
-                                {selectedMaterial.kind ===
-                                    'Oracal641'
-                                    ? 'м'
-                                    : 'шт.'}
+                                {quantityUnit(selectedMaterial.kind)}
                             </strong>
                         </div>
 
@@ -1558,10 +1620,7 @@ export default function IssuePage() {
                                         selectedMaterial.id,
                                     ),
                                 )}{' '}
-                                {selectedMaterial.kind ===
-                                    'Oracal641'
-                                    ? 'м'
-                                    : 'шт.'}
+                                {quantityUnit(selectedMaterial.kind)}
                             </strong>
                         </div>
 
@@ -1580,10 +1639,7 @@ export default function IssuePage() {
                                         selectedMaterial,
                                     ),
                                 )}{' '}
-                                {selectedMaterial.kind ===
-                                    'Oracal641'
-                                    ? 'м'
-                                    : 'шт.'}
+                                {quantityUnit(selectedMaterial.kind)}
                             </strong>
                         </div>
                     </div>
@@ -1673,7 +1729,7 @@ export default function IssuePage() {
                                 </th>
 
                                 <th>
-                                    Ширина
+                                    Ширина / станок
                                 </th>
 
                                 <th>
@@ -1711,8 +1767,7 @@ export default function IssuePage() {
                                                         styles.materialCell
                                                     }
                                                 >
-                                                    {line.kind ===
-                                                        'Oracal641' && (
+                                                    {(line.kind === 'Oracal641' || line.kind === 'Ink') && (
                                                             <div
                                                                 style={{
                                                                     ...styles.smallColorSwatch,
@@ -1745,21 +1800,19 @@ export default function IssuePage() {
                                             </td>
 
                                             <td>
-                                                {line.widthMeters
-                                                    ? formatWidth(
-                                                        line.widthMeters,
-                                                    )
-                                                    : '—'}
+                                                {line.kind === 'Ink'
+                                                    ? `${line.machineName ?? 'Без станка'} · ${line.colorName ?? 'Без цвета'} · ${line.packageLiters ?? '—'} л`
+                                                    : line.widthMeters ? formatWidth(line.widthMeters) : '—'}
+                                                {filmMarkerText(line.categoryName)
+                                                    ? ` · ${filmMarkerText(line.categoryName)}`
+                                                    : ''}
                                             </td>
 
                                             <td>
                                                 {numberFormatter.format(
                                                     line.currentQuantity,
                                                 )}{' '}
-                                                {line.kind ===
-                                                    'Oracal641'
-                                                    ? 'м'
-                                                    : 'шт.'}
+                                                {line.kind === 'Oracal641' ? 'м' : line.kind === 'Ink' ? 'л' : 'шт.'}
                                             </td>
 
                                             <td>
@@ -1794,19 +1847,13 @@ export default function IssuePage() {
                                                     <input
                                                         type="number"
                                                         min={
-                                                            line.kind ===
-                                                                'Oracal641'
-                                                                ? '0.1'
-                                                                : '1'
+                                                            line.kind === 'Oracal641' ? '0.01' : line.kind === 'Ink' ? '0.1' : '1'
                                                         }
                                                         max={
                                                             line.currentQuantity
                                                         }
                                                         step={
-                                                            line.kind ===
-                                                                'Oracal641'
-                                                                ? '0.1'
-                                                                : '1'
+                                                            line.kind === 'Oracal641' ? '0.01' : line.kind === 'Ink' ? '0.1' : '1'
                                                         }
                                                         value={
                                                             line.quantity
@@ -1851,10 +1898,7 @@ export default function IssuePage() {
                                                         )}
 
                                                     <span>
-                                                        {line.kind ===
-                                                            'Oracal641'
-                                                            ? 'м'
-                                                            : 'шт.'}
+                                                        {quantityUnit(line.kind)}
                                                     </span>
                                                 </div>
                                             </td>
@@ -1872,10 +1916,7 @@ export default function IssuePage() {
                                                     {numberFormatter.format(
                                                         after,
                                                     )}{' '}
-                                                    {line.kind ===
-                                                        'Oracal641'
-                                                        ? 'м'
-                                                        : 'шт.'}
+                                                    {quantityUnit(line.kind)}
                                                 </strong>
                                             </td>
 
@@ -1960,6 +2001,23 @@ export default function IssuePage() {
                     </button>
                 </div>
             </section>
+
+            <section className="panel" style={{ marginTop: 18 }}>
+                <div className="panel-header">
+                    <div><h2>Последние расходы</h2><p>Три последние проведённые операции</p></div>
+                    <button className="text-button" type="button" onClick={() => navigate('/documents?type=Issue')}>Показать все расходы</button>
+                </div>
+                <div className="recent-document-list">
+                    {recentIssues.map((document) => (
+                        <button key={document.id} type="button" onClick={() => navigate(`/documents?document=${document.id}`)}>
+                            <span className="document-icon issue"><FileText size={17} /></span>
+                            <span><strong>{document.number}</strong><small>{document.recipient || 'Получатель не указан'} · {document.items?.length ?? 0} позиций{document.comment ? ` · ${document.comment}` : ''}</small></span>
+                            <time>{new Date(document.postedAtUtc ?? document.createdAtUtc).toLocaleString('ru-RU')}</time>
+                        </button>
+                    ))}
+                </div>
+                {recentIssues.length === 0 && <div className="empty-state">Операций расхода ещё нет</div>}
+            </section>
         </div>
     );
 }
@@ -1973,6 +2031,16 @@ function normalizeMaterialGroupName(
             '',
         )
         .trim();
+}
+
+function inkColorOrder(value?: string | null) {
+    const order = ['Cyan', 'Magenta', 'Yellow', 'Black', 'White'];
+    const index = order.indexOf(value ?? '');
+    return index < 0 ? 99 : index;
+}
+
+function quantityUnit(kind: string) {
+    return kind === 'Oracal641' ? 'м' : kind === 'Ink' ? 'л' : 'шт.';
 }
 
 function formatWidth(

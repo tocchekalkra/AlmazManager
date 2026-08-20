@@ -5,6 +5,8 @@ import {
     type CSSProperties,
     type FormEvent,
     type ReactNode,
+    type Dispatch,
+    type SetStateAction,
 } from 'react';
 
 import {
@@ -30,6 +32,12 @@ type UserItem = {
     role: string;
     isActive: boolean;
     createdAtUtc: string;
+    canManageMaterials: boolean;
+    canArchiveMaterials: boolean;
+    canRestoreMaterials: boolean;
+    canPermanentlyDeleteMaterials: boolean;
+    canCancelDocuments: boolean;
+    canManageSupplies: boolean;
 };
 
 type CategoryAccess = {
@@ -57,6 +65,14 @@ type PermissionField =
     | 'canIssue'
     | 'canInventoryStandard'
     | 'canInventoryOracal';
+
+type SystemPermissionField =
+    | 'canManageMaterials'
+    | 'canArchiveMaterials'
+    | 'canRestoreMaterials'
+    | 'canPermanentlyDeleteMaterials'
+    | 'canCancelDocuments'
+    | 'canManageSupplies';
 
 const emptyCreateForm: CreateUserForm = {
     fullName: '',
@@ -524,9 +540,8 @@ export default function UsersPage() {
             setError('');
             setSuccess('');
 
-            await api.put(
-                `/users/${selectedUser.id}/category-access`,
-                {
+            await Promise.all([
+                api.put(`/users/${selectedUser.id}/category-access`, {
                     accesses:
                         accesses.map(
                             access => ({
@@ -549,14 +564,23 @@ export default function UsersPage() {
                                     access.canInventoryOracal,
                             }),
                         ),
-                },
-            );
+                }),
+                api.put(`/users/${selectedUser.id}/system-access`, {
+                    canManageMaterials: selectedUser.canManageMaterials,
+                    canArchiveMaterials: selectedUser.canArchiveMaterials,
+                    canRestoreMaterials: selectedUser.canRestoreMaterials,
+                    canPermanentlyDeleteMaterials: selectedUser.canPermanentlyDeleteMaterials,
+                    canCancelDocuments: selectedUser.canCancelDocuments,
+                    canManageSupplies: selectedUser.canManageSupplies,
+                }),
+            ]);
 
             setSuccess(
                 `Права пользователя «${selectedUser.fullName}» сохранены.`,
             );
 
             closeAccessModal();
+            await loadUsers();
         } catch (
         requestError: any
         ) {
@@ -1262,6 +1286,17 @@ export default function UsersPage() {
                                 )}
                         </div>
 
+                        {selectedUser.role !== 'Administrator' && (
+                            <div className="system-permissions-grid">
+                                <SystemPermission label="Создавать и редактировать материалы" field="canManageMaterials" user={selectedUser} setUser={setSelectedUser} />
+                                <SystemPermission label="Архивировать материалы" field="canArchiveMaterials" user={selectedUser} setUser={setSelectedUser} />
+                                <SystemPermission label="Восстанавливать материалы" field="canRestoreMaterials" user={selectedUser} setUser={setSelectedUser} />
+                                <SystemPermission label="Безвозвратно удалять материалы" field="canPermanentlyDeleteMaterials" user={selectedUser} setUser={setSelectedUser} />
+                                <SystemPermission label="Отменять проведённые документы" field="canCancelDocuments" user={selectedUser} setUser={setSelectedUser} />
+                                <SystemPermission label="Управлять счетами и поставками" field="canManageSupplies" user={selectedUser} setUser={setSelectedUser} />
+                            </div>
+                        )}
+
                         {selectedUser.role ===
                             'Administrator' ? (
                             <Message type="info">
@@ -1511,6 +1546,31 @@ function PermissionHeader({
         >
             {children}
         </th>
+    );
+}
+
+function SystemPermission({
+    label,
+    field,
+    user,
+    setUser,
+}: {
+    label: string;
+    field: SystemPermissionField;
+    user: UserItem;
+    setUser: Dispatch<SetStateAction<UserItem | null>>;
+}) {
+    return (
+        <label className="system-permission-item">
+            <input
+                type="checkbox"
+                checked={user[field]}
+                onChange={(event) => setUser((current) => current
+                    ? { ...current, [field]: event.target.checked }
+                    : current)}
+            />
+            <span>{label}</span>
+        </label>
     );
 }
 

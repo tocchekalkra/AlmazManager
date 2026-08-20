@@ -10,6 +10,7 @@ import App from './App';
 import {
     AuthProvider,
 } from './auth/AuthContext';
+import { ThemeProvider } from './theme/ThemeContext';
 
 import './styles/global.css';
 
@@ -19,7 +20,9 @@ createRoot(
     <StrictMode>
         <BrowserRouter>
             <AuthProvider>
-                <App />
+                <ThemeProvider>
+                    <App />
+                </ThemeProvider>
             </AuthProvider>
         </BrowserRouter>
     </StrictMode>,

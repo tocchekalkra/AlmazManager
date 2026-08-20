@@ -1,4 +1,6 @@
 ﻿using AlmazManager.Application.Features.Materials.Commands;
+using AlmazManager.Application.Interfaces;
+using AlmazManager.Application.Security;
 using AlmazManager.Contracts.Responses;
 using AlmazManager.Domain.Enums;
 using AlmazManager.Domain.Interfaces;
@@ -9,18 +11,26 @@ public sealed class UpdateMaterialHandler
 {
     private readonly IMaterialRepository _materialRepository;
     private readonly ICategoryRepository _categoryRepository;
+    private readonly ISystemAccessService _systemAccessService;
+    private readonly ICategoryAccessService _categoryAccessService;
 
     public UpdateMaterialHandler(
         IMaterialRepository materialRepository,
-        ICategoryRepository categoryRepository)
+        ICategoryRepository categoryRepository,
+        ISystemAccessService systemAccessService,
+        ICategoryAccessService categoryAccessService)
     {
         _materialRepository = materialRepository;
         _categoryRepository = categoryRepository;
+        _systemAccessService = systemAccessService;
+        _categoryAccessService = categoryAccessService;
     }
 
     public async Task<MaterialResponse> HandleAsync(
         UpdateMaterialCommand command)
     {
+        await _systemAccessService.EnsureAccessAsync(SystemPermission.ManageMaterials);
+
         var material =
             await _materialRepository.GetByIdAsync(
                 command.MaterialId);
@@ -30,6 +40,10 @@ public sealed class UpdateMaterialHandler
             throw new InvalidOperationException(
                 "Материал не найден.");
         }
+
+        await _categoryAccessService.EnsureAccessAsync(
+            material.CategoryId,
+            CategoryPermission.View);
 
         var category =
             await _categoryRepository.GetByIdAsync(
@@ -46,6 +60,10 @@ public sealed class UpdateMaterialHandler
             throw new InvalidOperationException(
                 $"Категория '{category.Name}' находится в архиве.");
         }
+
+        await _categoryAccessService.EnsureAccessAsync(
+            category.Id,
+            CategoryPermission.View);
 
         if (!Enum.TryParse<MeasurementUnit>(
                 command.Unit,
@@ -113,6 +131,14 @@ public sealed class UpdateMaterialHandler
                 command.ColorCode ?? string.Empty,
                 command.ColorName ?? string.Empty,
                 command.ColorHex ?? string.Empty);
+        }
+        else if (kind == MaterialKind.Ink)
+        {
+            material.ConfigureInk(
+                command.MachineName ?? string.Empty,
+                command.ColorName ?? command.ColorCode ?? string.Empty,
+                command.PackageLiters ?? 0,
+                command.ColorHex);
         }
         else
         {

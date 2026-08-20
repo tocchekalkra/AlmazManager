@@ -66,6 +66,12 @@ public sealed class Material : BaseEntity
     /// </summary>
     public string? ColorHex { get; private set; }
 
+    /// <summary>Название станка, к которому относится краска.</summary>
+    public string? MachineName { get; private set; }
+
+    /// <summary>Фасовка краски в литрах: 1 или 5.</summary>
+    public decimal? PackageLiters { get; private set; }
+
     public void Rename(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -130,6 +136,8 @@ public sealed class Material : BaseEntity
         ColorCode = null;
         ColorName = null;
         ColorHex = null;
+        MachineName = null;
+        PackageLiters = null;
     }
 
     public void ConfigureOracal641(
@@ -184,6 +192,40 @@ public sealed class Material : BaseEntity
 
         // Oracal учитывается в погонных метрах.
         Unit = MeasurementUnit.Meter;
+        MachineName = null;
+        PackageLiters = null;
+    }
+
+    public void ConfigureInk(
+        string machineName,
+        string colorName,
+        decimal packageLiters,
+        string? colorHex)
+    {
+        if (string.IsNullOrWhiteSpace(machineName))
+            throw new ArgumentException("Для краски необходимо указать станок.", nameof(machineName));
+
+        var allowedColors = new[] { "Cyan", "Magenta", "Yellow", "Black", "White" };
+        var normalizedColor = allowedColors.FirstOrDefault(value =>
+            string.Equals(value, colorName?.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        if (normalizedColor is null)
+            throw new ArgumentException("Разрешены цвета Cyan, Magenta, Yellow, Black и White.", nameof(colorName));
+
+        if (packageLiters != 1m && packageLiters != 5m)
+            throw new ArgumentException("Для краски разрешена фасовка 1 л или 5 л.", nameof(packageLiters));
+
+        if (!string.IsNullOrWhiteSpace(colorHex) && !IsValidHexColor(colorHex))
+            throw new ArgumentException("Цвет должен быть указан в формате HEX, например #00AEEF.", nameof(colorHex));
+
+        Kind = MaterialKind.Ink;
+        Unit = MeasurementUnit.Liter;
+        WidthMeters = null;
+        ColorCode = normalizedColor;
+        ColorName = normalizedColor;
+        ColorHex = string.IsNullOrWhiteSpace(colorHex) ? DefaultInkHex(normalizedColor) : colorHex.Trim().ToUpperInvariant();
+        MachineName = machineName.Trim();
+        PackageLiters = packageLiters;
     }
 
     public void Archive()
@@ -230,4 +272,14 @@ public sealed class Material : BaseEntity
             .All(character =>
                 Uri.IsHexDigit(character));
     }
+
+    private static string DefaultInkHex(string colorName) => colorName switch
+    {
+        "Cyan" => "#00AEEF",
+        "Magenta" => "#EC008C",
+        "Yellow" => "#FFF200",
+        "Black" => "#111111",
+        "White" => "#F4F4F4",
+        _ => "#808080"
+    };
 }

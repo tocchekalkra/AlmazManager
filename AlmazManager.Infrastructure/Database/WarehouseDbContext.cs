@@ -41,6 +41,24 @@ public sealed class WarehouseDbContext : DbContext
     public DbSet<InventoryDocumentItem> InventoryDocumentItems =>
         Set<InventoryDocumentItem>();
 
+    public DbSet<WarehouseDocumentSequence> WarehouseDocumentSequences =>
+        Set<WarehouseDocumentSequence>();
+
+    public DbSet<UserPreference> UserPreferences =>
+        Set<UserPreference>();
+
+    public DbSet<AuditEvent> AuditEvents =>
+        Set<AuditEvent>();
+
+    public DbSet<Notification> Notifications =>
+        Set<Notification>();
+
+    public DbSet<SupplyInvoice> SupplyInvoices =>
+        Set<SupplyInvoice>();
+
+    public DbSet<SupplyInvoiceItem> SupplyInvoiceItems =>
+        Set<SupplyInvoiceItem>();
+
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
     {
