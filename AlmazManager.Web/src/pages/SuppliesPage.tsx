@@ -26,6 +26,7 @@ type Material = {
   widthMeters?: number | null;
   colorCode?: string | null;
   colorName?: string | null;
+  colorHex?: string | null;
   machineName?: string | null;
   packageLiters?: number | null;
 };
