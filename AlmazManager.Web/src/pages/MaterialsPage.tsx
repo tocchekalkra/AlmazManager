@@ -3270,7 +3270,7 @@ function StandardMaterialGroupCard({
                         {
                             group.materials.length
                         }{' '}
-                        ширин
+                        {group.materials[0]?.kind === 'Ink' ? 'шт.' : 'ширин'}
                     </div>
                 </div>
 
@@ -3304,11 +3304,11 @@ function StandardMaterialGroupCard({
                                             styles.widthValue
                                         }
                                     >
-                                        {material.widthMeters
-                                            ? formatWidth(
-                                                material.widthMeters,
-                                            )
-                                            : 'Без ширины'}
+                                        {material.kind === 'Ink'
+                                            ? `${material.machineName ?? 'Без станка'} · ${material.colorName ?? 'Без цвета'} · ${material.packageLiters ?? '—'} л`
+                                            : material.widthMeters
+                                                ? formatWidth(material.widthMeters)
+                                                : 'Без ширины'}
                                     </strong>
 
                                     {filmMarkerText(material.categoryName) && (

@@ -91,7 +91,7 @@
 .form-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
 .form-grid label,.full-field { display: flex; flex-direction: column; gap: 6px; color: #9da9b7; font-size: 11px; }
 .form-grid input,.full-field textarea,.supply-line-builder input,.supply-line-builder select { min-height: 40px; border: 1px solid #2a3542; border-radius: 9px; background: #0d141c; color: #e3e9f0; padding: 8px 10px; }
-.supply-line-builder { display: grid; grid-template-columns: 1fr 140px auto; gap: 9px; margin: 16px 0 10px; }
+.supply-line-builder { display: grid; grid-template-columns: minmax(150px,.8fr) minmax(170px,1fr) minmax(190px,1.2fr) 110px auto; gap: 9px; margin: 16px 0 10px; }
 .draft-lines { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .draft-lines > div { display: grid; grid-template-columns: 1fr auto 30px; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid #26313e; border-radius: 9px; color: #cbd4de; }
 .full-field textarea { min-height: 85px; resize: vertical; }

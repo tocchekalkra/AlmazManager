@@ -78,6 +78,8 @@ export default function SuppliesPage() {
   const [comment, setComment] = useState("");
   const [lines, setLines] = useState<DraftLine[]>([]);
   const [materialId, setMaterialId] = useState("");
+  const [pickerCategoryId, setPickerCategoryId] = useState("");
+  const [pickerGroupKey, setPickerGroupKey] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
@@ -88,16 +90,28 @@ export default function SuppliesPage() {
     () => new Map(materials.map((item) => [item.id, item])),
     [materials],
   );
-  const materialsByCategory = useMemo(
-    () => categories
-      .filter((category) => category.isActive)
-      .map((category) => ({
-        category,
-        materials: materials.filter((material) => material.categoryId === category.id),
-      }))
-      .filter((group) => group.materials.length > 0),
-    [categories, materials],
-  );
+  const pickerCategories = useMemo(() => categories
+    .filter((category) => category.isActive && materials.some((material) => material.categoryId === category.id)),
+    [categories, materials]);
+  const pickerMaterials = useMemo(() => materials.filter((material) => material.categoryId === pickerCategoryId), [materials, pickerCategoryId]);
+  const pickerGroups = useMemo(() => {
+    const groups = new Map<string, { key: string; label: string; materials: Material[]; ink: boolean }>();
+    for (const material of pickerMaterials) {
+      const ink = material.kind === "Ink";
+      const label = ink ? (material.machineName?.trim() || "Без станка") : baseMaterialName(material.name);
+      const key = `${ink ? "machine" : "material"}:${label.toLowerCase()}`;
+      const group = groups.get(key) ?? { key, label, materials: [], ink };
+      group.materials.push(material);
+      groups.set(key, group);
+    }
+    return [...groups.values()].map((group) => ({
+      ...group,
+      materials: group.materials.sort((a, b) => group.ink
+        ? inkColorOrder(a.colorName) - inkColorOrder(b.colorName) || Number(a.packageLiters ?? 0) - Number(b.packageLiters ?? 0)
+        : Number(b.widthMeters ?? 0) - Number(a.widthMeters ?? 0)),
+    }));
+  }, [pickerMaterials]);
+  const selectedPickerGroup = pickerGroups.find((group) => group.key === pickerGroupKey);
   const selected = supplies.find((item) => item.id === selectedId) ?? null;
 
   useEffect(() => {
@@ -148,6 +162,7 @@ export default function SuppliesPage() {
         : [...current, { materialId, expectedQuantity: normalizedQuantity }],
     );
     setMaterialId("");
+    setPickerGroupKey("");
     setQuantity(1);
   }
 
@@ -272,6 +287,9 @@ export default function SuppliesPage() {
     setExpectedDeliveryDate("");
     setComment("");
     setLines([]);
+    setPickerCategoryId("");
+    setPickerGroupKey("");
+    setMaterialId("");
   }
 
   return (
@@ -402,9 +420,7 @@ export default function SuppliesPage() {
                       return (
                         <tr key={item.id}>
                           <td className="primary-cell">
-                            {material
-                              ? materialDisplayName(material)
-                              : "Материал из архива"}
+                            {material ? <MaterialLabel material={material} /> : "Материал из архива"}
                             <small className="table-subtitle">
                               {material?.article}
                             </small>
@@ -546,18 +562,39 @@ export default function SuppliesPage() {
             </div>
             <div className="supply-line-builder">
               <select
+                value={pickerCategoryId}
+                onChange={(event) => {
+                  setPickerCategoryId(event.target.value);
+                  setPickerGroupKey("");
+                  setMaterialId("");
+                }}
+              >
+                <option value="">Категория</option>
+                {pickerCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+              </select>
+              <select
+                value={pickerGroupKey}
+                disabled={!pickerCategoryId}
+                onChange={(event) => {
+                  setPickerGroupKey(event.target.value);
+                  setMaterialId("");
+                }}
+              >
+                <option value="">{pickerGroups[0]?.ink ? "Станок" : "Материал"}</option>
+                {pickerGroups.map((group) => <option key={group.key} value={group.key}>{group.label}</option>)}
+              </select>
+              <select
                 value={materialId}
+                disabled={!pickerGroupKey}
                 onChange={(event) => setMaterialId(event.target.value)}
               >
-                <option value="">Выберите материал</option>
-                {materialsByCategory.map(({ category, materials: categoryMaterials }) => (
-                  <optgroup key={category.id} label={category.name}>
-                    {categoryMaterials.map((material) => (
-                      <option key={material.id} value={material.id}>
-                        {materialDisplayName(material)} · {material.article}
-                      </option>
-                    ))}
-                  </optgroup>
+                <option value="">{selectedPickerGroup?.ink ? "Цвет" : "Ширина"}</option>
+                {selectedPickerGroup?.materials.map((material) => (
+                  <option key={material.id} value={material.id}>
+                    {selectedPickerGroup?.ink
+                      ? `${material.colorName ?? "Без цвета"} · ${material.packageLiters ?? "—"} л`
+                      : `${material.widthMeters ? `${formatQuantity(material.widthMeters)} м` : "Без ширины"} · ${material.article}`}
+                  </option>
                 ))}
               </select>
               <input
@@ -581,7 +618,7 @@ export default function SuppliesPage() {
                 <div key={line.materialId}>
                   <span>
                     {materialById.get(line.materialId)
-                      ? materialDisplayName(materialById.get(line.materialId)!)
+                      ? <MaterialLabel material={materialById.get(line.materialId)!} />
                       : "Материал из архива"}
                   </span>
                   <strong>
@@ -638,6 +675,14 @@ export default function SuppliesPage() {
 function formatDate(value: string) {
   return new Date(`${value}T00:00:00`).toLocaleDateString("ru-RU");
 }
+function MaterialLabel({ material }: { material: Material }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+      {material.colorHex && <i style={{ width: 16, height: 16, borderRadius: 5, flex: "0 0 auto", background: material.colorHex, border: "1px solid rgba(127,127,127,.35)" }} />}
+      <span>{materialDisplayName(material)}</span>
+    </span>
+  );
+}
 function formatQuantity(value: number) {
   return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 3 }).format(
     value,
@@ -677,4 +722,13 @@ function statusLabel(status: string) {
       } as Record<string, string>
     )[status] ?? status
   );
+}
+
+function baseMaterialName(value: string) {
+  return value.replace(/\s+-?\s*\d+(?:[.,]\d+)?\s*м\s*$/i, "").trim();
+}
+function inkColorOrder(value?: string | null) {
+  const order = ["Cyan", "Magenta", "Yellow", "Black", "White"];
+  const index = order.indexOf(value ?? "");
+  return index < 0 ? 99 : index;
 }

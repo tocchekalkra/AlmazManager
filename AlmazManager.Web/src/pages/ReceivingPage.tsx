@@ -41,6 +41,8 @@ type MaterialCatalogItem = {
     colorCode?: string | null;
     colorName?: string | null;
     colorHex?: string | null;
+    machineName?: string | null;
+    packageLiters?: number | null;
 };
 
 type Category = {
@@ -64,6 +66,8 @@ type ReceivingLine = {
     colorCode?: string | null;
     colorName?: string | null;
     colorHex?: string | null;
+    machineName?: string | null;
+    packageLiters?: number | null;
 
     quantity: number;
 };
@@ -261,10 +265,9 @@ export default function ReceivingPage() {
                 const material of
                 standardMaterials
             ) {
-                const groupName =
-                    normalizeMaterialGroupName(
-                        material.name,
-                    );
+                const groupName = material.kind === 'Ink'
+                    ? (material.machineName?.trim() || 'Без станка')
+                    : normalizeMaterialGroupName(material.name);
 
                 const key =
                     `${material.categoryId}::${groupName.toLowerCase()}`;
@@ -309,14 +312,9 @@ export default function ReceivingPage() {
                                     a,
                                     b,
                                 ) =>
-                                    Number(
-                                        b.widthMeters ??
-                                        0,
-                                    ) -
-                                    Number(
-                                        a.widthMeters ??
-                                        0,
-                                    ),
+                                    a.kind === 'Ink'
+                                        ? inkColorOrder(a.colorName) - inkColorOrder(b.colorName) || Number(a.packageLiters ?? 0) - Number(b.packageLiters ?? 0)
+                                        : Number(b.widthMeters ?? 0) - Number(a.widthMeters ?? 0),
                             ),
                 }));
         }, [
@@ -707,6 +705,9 @@ export default function ReceivingPage() {
 
                         colorHex:
                             selectedMaterial.colorHex,
+
+                        machineName: selectedMaterial.machineName,
+                        packageLiters: selectedMaterial.packageLiters,
 
                         quantity:
                             parsedQuantity,
@@ -1185,7 +1186,7 @@ export default function ReceivingPage() {
                                     }
                                 >
                                     <span>
-                                        Материал
+                                        Материал / станок
                                     </span>
 
                                     <select
@@ -1225,7 +1226,7 @@ export default function ReceivingPage() {
                                     }
                                 >
                                     <span>
-                                        Ширина
+                                        {selectedStandardGroup?.materials[0]?.kind === 'Ink' ? 'Цвет' : 'Ширина'}
                                     </span>
 
                                     <select
@@ -1264,11 +1265,9 @@ export default function ReceivingPage() {
                                                             material.id
                                                         }
                                                     >
-                                                        {material.widthMeters
-                                                            ? formatWidth(
-                                                                material.widthMeters,
-                                                            )
-                                                            : 'Без ширины'}{' '}
+                                                        {material.kind === 'Ink'
+                                                            ? `${material.colorName ?? 'Без цвета'} · ${material.packageLiters ?? '—'} л`
+                                                            : material.widthMeters ? formatWidth(material.widthMeters) : 'Без ширины'}{' '}
                                                         {filmMarkerText(material.categoryName)
                                                             ? `· ${filmMarkerText(material.categoryName)} `
                                                             : ''}
@@ -1443,10 +1442,7 @@ export default function ReceivingPage() {
                                         styles.unitBadge
                                     }
                                 >
-                                    {materialMode ===
-                                        'oracal'
-                                        ? 'м'
-                                        : 'шт.'}
+                                    {selectedMaterial?.kind === 'Ink' ? 'л' : materialMode === 'oracal' ? 'м' : 'шт.'}
                                 </span>
                             </div>
                         </label>
@@ -1594,7 +1590,7 @@ export default function ReceivingPage() {
                                 </th>
 
                                 <th>
-                                    Ширина
+                                    Ширина / станок
                                 </th>
 
                                 <th>
@@ -1623,8 +1619,7 @@ export default function ReceivingPage() {
                                                     styles.materialNameCell
                                                 }
                                             >
-                                                {line.kind ===
-                                                    'Oracal641' && (
+                                                {(line.kind === 'Oracal641' || line.kind === 'Ink') && (
                                                         <div
                                                             style={{
                                                                 ...styles.smallColorSwatch,
@@ -1660,11 +1655,9 @@ export default function ReceivingPage() {
                                         </td>
 
                                         <td>
-                                            {line.widthMeters
-                                                ? formatWidth(
-                                                    line.widthMeters,
-                                                )
-                                                : '—'}
+                                            {line.kind === 'Ink'
+                                                ? `${line.machineName ?? 'Без станка'} · ${line.colorName ?? 'Без цвета'} · ${line.packageLiters ?? '—'} л`
+                                                : line.widthMeters ? formatWidth(line.widthMeters) : '—'}
                                             {filmMarkerText(line.categoryName)
                                                 ? ` · ${filmMarkerText(line.categoryName)}`
                                                 : ''}
@@ -1707,10 +1700,7 @@ export default function ReceivingPage() {
                                                 />
 
                                                 <span>
-                                                    {line.kind ===
-                                                        'Oracal641'
-                                                        ? 'м'
-                                                        : 'шт.'}
+                                                    {line.kind === 'Oracal641' ? 'м' : line.kind === 'Ink' ? 'л' : 'шт.'}
                                                 </span>
                                             </div>
                                         </td>
@@ -1813,6 +1803,12 @@ function normalizeMaterialGroupName(
             '',
         )
         .trim();
+}
+
+function inkColorOrder(value?: string | null) {
+    const order = ['Cyan', 'Magenta', 'Yellow', 'Black', 'White'];
+    const index = order.indexOf(value ?? '');
+    return index < 0 ? 99 : index;
 }
 
 function formatWidth(

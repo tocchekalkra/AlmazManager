@@ -44,6 +44,8 @@ type MaterialCatalogItem = {
     colorCode?: string | null;
     colorName?: string | null;
     colorHex?: string | null;
+    machineName?: string | null;
+    packageLiters?: number | null;
 };
 
 type Category = {
@@ -66,6 +68,8 @@ type IssueLine = {
     colorCode?: string | null;
     colorName?: string | null;
     colorHex?: string | null;
+    machineName?: string | null;
+    packageLiters?: number | null;
 
     currentQuantity: number;
     quantity: number;
@@ -257,10 +261,9 @@ export default function IssuePage() {
                 const material of
                 standardMaterials
             ) {
-                const name =
-                    normalizeMaterialGroupName(
-                        material.name,
-                    );
+                const name = material.kind === 'Ink'
+                    ? (material.machineName?.trim() || 'Без станка')
+                    : normalizeMaterialGroupName(material.name);
 
                 const key =
                     `${material.categoryId}::${name.toLowerCase()}`;
@@ -295,14 +298,9 @@ export default function IssuePage() {
                             .slice()
                             .sort(
                                 (a, b) =>
-                                    Number(
-                                        b.widthMeters ??
-                                        0,
-                                    ) -
-                                    Number(
-                                        a.widthMeters ??
-                                        0,
-                                    ),
+                                    a.kind === 'Ink'
+                                        ? inkColorOrder(a.colorName) - inkColorOrder(b.colorName) || Number(a.packageLiters ?? 0) - Number(b.packageLiters ?? 0)
+                                        : Number(b.widthMeters ?? 0) - Number(a.widthMeters ?? 0),
                             ),
                 }));
         }, [standardMaterials, categories]);
@@ -690,11 +688,7 @@ export default function IssuePage() {
                         availableBeforeDocument -
                         alreadyAdded,
                     ),
-                )} ${selectedMaterial.kind ===
-                    'Oracal641'
-                    ? 'м'
-                    : 'шт.'
-                }.`,
+                )} ${quantityUnit(selectedMaterial.kind)}.`,
             );
 
             return;
@@ -760,6 +754,9 @@ export default function IssuePage() {
 
                         colorHex:
                             selectedMaterial.colorHex,
+
+                        machineName: selectedMaterial.machineName,
+                        packageLiters: selectedMaterial.packageLiters,
 
                         currentQuantity:
                             selectedMaterial.currentQuantity,
@@ -1203,7 +1200,7 @@ export default function IssuePage() {
                                     }
                                 >
                                     <span>
-                                        Материал
+                                        Материал / станок
                                     </span>
 
                                     <select
@@ -1244,7 +1241,7 @@ export default function IssuePage() {
                                     }
                                 >
                                     <span>
-                                        Ширина
+                                        {selectedStandardGroup?.materials[0]?.kind === 'Ink' ? 'Цвет' : 'Ширина'}
                                     </span>
 
                                     <select
@@ -1290,11 +1287,9 @@ export default function IssuePage() {
                                                                 material.id
                                                             }
                                                         >
-                                                            {material.widthMeters
-                                                                ? formatWidth(
-                                                                    material.widthMeters,
-                                                                )
-                                                                : 'Без ширины'}
+                                                            {material.kind === 'Ink'
+                                                                ? `${material.colorName ?? 'Без цвета'} · ${material.packageLiters ?? '—'} л`
+                                                                : material.widthMeters ? formatWidth(material.widthMeters) : 'Без ширины'}
                                                             {filmMarkerText(material.categoryName)
                                                                 ? ` · ${filmMarkerText(material.categoryName)}`
                                                                 : ''}
@@ -1606,10 +1601,7 @@ export default function IssuePage() {
                                 {numberFormatter.format(
                                     selectedMaterial.currentQuantity,
                                 )}{' '}
-                                {selectedMaterial.kind ===
-                                    'Oracal641'
-                                    ? 'м'
-                                    : 'шт.'}
+                                {quantityUnit(selectedMaterial.kind)}
                             </strong>
                         </div>
 
@@ -1628,10 +1620,7 @@ export default function IssuePage() {
                                         selectedMaterial.id,
                                     ),
                                 )}{' '}
-                                {selectedMaterial.kind ===
-                                    'Oracal641'
-                                    ? 'м'
-                                    : 'шт.'}
+                                {quantityUnit(selectedMaterial.kind)}
                             </strong>
                         </div>
 
@@ -1650,10 +1639,7 @@ export default function IssuePage() {
                                         selectedMaterial,
                                     ),
                                 )}{' '}
-                                {selectedMaterial.kind ===
-                                    'Oracal641'
-                                    ? 'м'
-                                    : 'шт.'}
+                                {quantityUnit(selectedMaterial.kind)}
                             </strong>
                         </div>
                     </div>
@@ -1743,7 +1729,7 @@ export default function IssuePage() {
                                 </th>
 
                                 <th>
-                                    Ширина
+                                    Ширина / станок
                                 </th>
 
                                 <th>
@@ -1781,8 +1767,7 @@ export default function IssuePage() {
                                                         styles.materialCell
                                                     }
                                                 >
-                                                    {line.kind ===
-                                                        'Oracal641' && (
+                                                    {(line.kind === 'Oracal641' || line.kind === 'Ink') && (
                                                             <div
                                                                 style={{
                                                                     ...styles.smallColorSwatch,
@@ -1815,11 +1800,9 @@ export default function IssuePage() {
                                             </td>
 
                                             <td>
-                                                {line.widthMeters
-                                                    ? formatWidth(
-                                                        line.widthMeters,
-                                                    )
-                                                    : '—'}
+                                                {line.kind === 'Ink'
+                                                    ? `${line.machineName ?? 'Без станка'} · ${line.colorName ?? 'Без цвета'} · ${line.packageLiters ?? '—'} л`
+                                                    : line.widthMeters ? formatWidth(line.widthMeters) : '—'}
                                                 {filmMarkerText(line.categoryName)
                                                     ? ` · ${filmMarkerText(line.categoryName)}`
                                                     : ''}
@@ -1829,10 +1812,7 @@ export default function IssuePage() {
                                                 {numberFormatter.format(
                                                     line.currentQuantity,
                                                 )}{' '}
-                                                {line.kind ===
-                                                    'Oracal641'
-                                                    ? 'м'
-                                                    : 'шт.'}
+                                                {line.kind === 'Oracal641' ? 'м' : line.kind === 'Ink' ? 'л' : 'шт.'}
                                             </td>
 
                                             <td>
@@ -1918,10 +1898,7 @@ export default function IssuePage() {
                                                         )}
 
                                                     <span>
-                                                        {line.kind ===
-                                                            'Oracal641'
-                                                            ? 'м'
-                                                            : 'шт.'}
+                                                        {quantityUnit(line.kind)}
                                                     </span>
                                                 </div>
                                             </td>
@@ -1939,10 +1916,7 @@ export default function IssuePage() {
                                                     {numberFormatter.format(
                                                         after,
                                                     )}{' '}
-                                                    {line.kind ===
-                                                        'Oracal641'
-                                                        ? 'м'
-                                                        : 'шт.'}
+                                                    {quantityUnit(line.kind)}
                                                 </strong>
                                             </td>
 
@@ -2057,6 +2031,16 @@ function normalizeMaterialGroupName(
             '',
         )
         .trim();
+}
+
+function inkColorOrder(value?: string | null) {
+    const order = ['Cyan', 'Magenta', 'Yellow', 'Black', 'White'];
+    const index = order.indexOf(value ?? '');
+    return index < 0 ? 99 : index;
+}
+
+function quantityUnit(kind: string) {
+    return kind === 'Oracal641' ? 'м' : kind === 'Ink' ? 'л' : 'шт.';
 }
 
 function formatWidth(

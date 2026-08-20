@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.WarningAmber
@@ -240,6 +241,17 @@ fun DashboardScreen(
             modifier = Modifier.fillMaxWidth(),
             onClick = onOpenDocuments,
         )
+        dashboard.inkByMachine.forEach { machine ->
+            DashboardMetricCard(
+                label = machine.machineName,
+                hint = "Общий остаток краски",
+                value = "${numberFormat.format(machine.totalLiters)} л",
+                icon = Icons.Default.Opacity,
+                tone = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onOpenStock,
+            )
+        }
 
         val maxActivity = maxOf(1, dashboard.consumptionDays.maxOfOrNull { it.itemCount } ?: 1)
         Card(
@@ -286,45 +298,6 @@ fun DashboardScreen(
                 }
                 if (dashboard.consumptionDays.isEmpty()) {
                     Text("За последние дни расхода не было.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        }
-
-        if (dashboard.inkByMachine.isNotEmpty()) {
-            DashboardPanel(
-                title = "Остатки краски",
-                subtitle = "По станкам и цветам · литры",
-                icon = Icons.Default.BarChart,
-                actionLabel = "Открыть склад",
-                onAction = onOpenStock,
-            ) {
-                dashboard.inkByMachine.forEachIndexed { machineIndex, machine ->
-                    if (machineIndex > 0) HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text(machine.machineName, Modifier.weight(1f), fontWeight = FontWeight.Bold)
-                        Text("${numberFormat.format(machine.totalLiters)} л", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                    }
-                    Spacer(Modifier.height(7.dp))
-                    machine.colors.forEach { color ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Box(
-                                Modifier.size(16.dp).background(
-                                    parseHexColor(color.colorHex),
-                                    RoundedCornerShape(5.dp),
-                                ),
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(color.colorName, Modifier.weight(1f))
-                            Text(
-                                "${numberFormat.format(color.quantityLiters)} л",
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (color.belowMinimum) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                    }
                 }
             }
         }
@@ -644,7 +617,7 @@ fun StockScreen(api: ApiService) {
                                 Column(Modifier.fillMaxWidth().padding(12.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         materialGroup.items.firstOrNull()?.takeIf {
-                                            it.kind == "Oracal641" && !it.colorHex.isNullOrBlank()
+                                            (it.kind == "Oracal641" || it.kind == "Ink") && !it.colorHex.isNullOrBlank()
                                         }?.let { first ->
                                             Box(
                                                 Modifier.size(26.dp).background(
@@ -768,7 +741,10 @@ private fun HierarchyMaterialPicker(
         .firstOrNull { it.key == selectedMaterialName }
         ?.value
         .orEmpty()
-        .sortedByDescending { it.widthMeters ?: 0.0 }
+        .sortedWith(compareBy<MaterialItem> {
+            if (it.kind == "Ink") inkColorOrder(it.colorName) else 0
+        }.thenByDescending { it.widthMeters ?: 0.0 }.thenBy { it.packageLiters ?: 0.0 })
+    val inkCategory = categoryMaterials.firstOrNull()?.kind == "Ink"
 
     SelectionDropdown(
         label = "Категория",
@@ -779,22 +755,28 @@ private fun HierarchyMaterialPicker(
     )
 
     SelectionDropdown(
-        label = "Материал",
+        label = if (inkCategory) "Станок" else "Материал",
         value = selectedMaterialName,
-        placeholder = if (selectedCategoryId.isBlank()) "Сначала выберите категорию" else "Выберите материал",
+        placeholder = if (selectedCategoryId.isBlank()) "Сначала выберите категорию" else if (inkCategory) "Выберите станок" else "Выберите материал",
         options = materialGroups.map { it.key to it.key },
         enabled = selectedCategoryId.isNotBlank(),
         onSelect = onMaterialSelected,
     )
 
     SelectionDropdown(
-        label = "Ширина",
+        label = if (inkCategory) "Цвет" else "Ширина",
         value = widthMaterials.firstOrNull { it.id == selectedMaterialId }
             ?.let(::materialDisplayName)
             .orEmpty(),
-        placeholder = if (selectedMaterialName.isBlank()) "Сначала выберите материал" else "Выберите ширину",
+        placeholder = if (selectedMaterialName.isBlank()) {
+            if (inkCategory) "Сначала выберите станок" else "Сначала выберите материал"
+        } else if (inkCategory) "Выберите цвет" else "Выберите ширину",
         options = widthMaterials.map { material ->
-            material.id to "${material.widthMeters?.let { "${numberFormat.format(it)} м" } ?: "Без ширины"} · " +
+            material.id to (if (material.kind == "Ink") {
+                "${material.colorName ?: "Без цвета"} · ${numberFormat.format(material.packageLiters ?: 0.0)} л · "
+            } else {
+                "${material.widthMeters?.let { "${numberFormat.format(it)} м" } ?: "Без ширины"} · "
+            }) +
                 filmMarkerText(material.categoryName).let { if (it.isBlank()) "" else "$it · " } +
                 "остаток ${numberFormat.format(material.currentQuantity)} ${unitLabel(material.unit)}"
         },
@@ -2556,9 +2538,18 @@ private fun materialBaseName(material: MaterialItem): String {
             .ifBlank { "ORACAL 641" }
     }
 
+    if (material.kind == "Ink") {
+        return material.machineName ?: "Без станка"
+    }
+
     return material.name
         .replace(Regex("\\s+-?\\s*\\d+[.,]\\d+\\s*м\\s*$", RegexOption.IGNORE_CASE), "")
         .trim()
+}
+
+private fun inkColorOrder(value: String?): Int {
+    val index = listOf("Cyan", "Magenta", "Yellow", "Black", "White").indexOf(value)
+    return if (index < 0) 99 else index
 }
 
 @Composable

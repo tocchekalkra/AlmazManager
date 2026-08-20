@@ -9,6 +9,8 @@ import {
     AlertTriangle,
     Boxes,
     Check,
+    ChevronDown,
+    ChevronRight,
     FileSpreadsheet,
     FileText,
     GripVertical,
@@ -72,6 +74,8 @@ export default function StockPage() {
     const [orderMode, setOrderMode] = useState(false);
     const [draggedId, setDraggedId] = useState<string | null>(null);
     const [draggedCategoryId, setDraggedCategoryId] = useState<string | null>(null);
+    const [draggedGroupKey, setDraggedGroupKey] = useState<string | null>(null);
+    const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
     const [loading, setLoading] = useState(true);
     const [savingOrder, setSavingOrder] = useState(false);
     const [error, setError] = useState('');
@@ -257,6 +261,53 @@ export default function StockPage() {
         }
     }
 
+    async function reorderMaterialGroup(categoryId: string, targetKey: string) {
+        if (!orderMode || !draggedGroupKey || draggedGroupKey === targetKey || !data) return;
+        const category = standardCategories.find((item) => item.id === categoryId);
+        if (!category) return;
+        const groups = category.materials.map((group) => group.key);
+        const from = groups.indexOf(draggedGroupKey);
+        const to = groups.indexOf(targetKey);
+        if (from < 0 || to < 0) return;
+        const [moved] = groups.splice(from, 1);
+        groups.splice(to, 0, moved);
+        const groupOrder = new Map(groups.map((key, index) => [key, index]));
+        const indexed = data.items.map((item, index) => ({ item, index }));
+        const categoryItems = indexed
+            .filter(({ item }) => item.categoryId === categoryId)
+            .sort((a, b) => {
+                const aKey = materialGroupKey(a.item);
+                const bKey = materialGroupKey(b.item);
+                return (groupOrder.get(aKey) ?? Number.MAX_SAFE_INTEGER) -
+                    (groupOrder.get(bKey) ?? Number.MAX_SAFE_INTEGER) || a.index - b.index;
+            })
+            .map(({ item }) => item);
+        let categoryIndex = 0;
+        const items = data.items.map((item) => item.categoryId === categoryId
+            ? categoryItems[categoryIndex++]
+            : item);
+        setData({ ...data, items });
+        setDraggedGroupKey(null);
+        try {
+            setSavingOrder(true);
+            await api.put('/preferences', { materialOrder: items.map((item) => item.materialId) });
+        } catch (requestError: any) {
+            setError(requestError?.response?.data?.message ?? 'Не удалось сохранить порядок материалов.');
+            await loadStock();
+        } finally {
+            setSavingOrder(false);
+        }
+    }
+
+    function toggleCategory(categoryId: string) {
+        setCollapsedCategories((current) => {
+            const next = new Set(current);
+            if (next.has(categoryId)) next.delete(categoryId);
+            else next.add(categoryId);
+            return next;
+        });
+    }
+
     function runPdfExport(kind: 'standard' | 'oracal') {
         try {
             if (exportItems.length === 0) return;
@@ -359,6 +410,15 @@ export default function StockPage() {
             )}
             {error && <div style={styles.error}>{error}</div>}
 
+            <nav className="panel" style={styles.categoryNav} aria-label="Быстрый переход по категориям">
+                <strong>Категории:</strong>
+                {standardCategories.map((category) => (
+                    <button key={category.id} type="button" className="button secondary" onClick={() => document.getElementById(`stock-category-${category.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+                        {category.name}
+                    </button>
+                ))}
+            </nav>
+
             <StockSection
                 title="Обычные материалы"
                 subtitle="Баннеры, четыре категории плёнок и остальные материалы"
@@ -375,7 +435,7 @@ export default function StockPage() {
             >
                 {loading && <div style={styles.empty}>Загрузка...</div>}
                 {!loading && standardCategories.map((category) => (
-                    <section key={category.id} style={styles.categoryCard}>
+                    <section key={category.id} id={`stock-category-${category.id}`} style={{ ...styles.categoryCard, scrollMarginTop: 18 }}>
                         <div
                             style={{
                                 ...styles.categoryHeader,
@@ -388,9 +448,10 @@ export default function StockPage() {
                             }}
                             onDragOver={(event) => orderMode && event.preventDefault()}
                             onDrop={() => void reorderCategory(category.id)}
+                            onClick={() => !orderMode && toggleCategory(category.id)}
                         >
                             <div style={styles.categoryTitleWrap}>
-                                {orderMode ? <GripVertical size={19} /> : <Lock size={15} />}
+                                {orderMode ? <GripVertical size={19} /> : collapsedCategories.has(category.id) ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
                                 <div>
                                 <p className="eyebrow">КАТЕГОРИЯ</p>
                                 <h3>{category.name}</h3>
@@ -399,11 +460,21 @@ export default function StockPage() {
                             <span>{category.materials.reduce((sum, group) => sum + group.items.length, 0)} поз.</span>
                         </div>
 
-                        {category.materials.map((group) => (
-                            <div key={group.key} style={styles.materialGroup}>
-                                <div style={styles.materialGroupTitle}>
+                        {!collapsedCategories.has(category.id) && category.materials.map((group) => (
+                            <div
+                                key={group.key}
+                                style={styles.materialGroup}
+                            >
+                                <div
+                                    style={{ ...styles.materialGroupTitle, ...(orderMode ? { cursor: 'grab' } : {}) }}
+                                    draggable={orderMode}
+                                    onDragStart={() => { setDraggedGroupKey(group.key); setDraggedId(null); }}
+                                    onDragOver={(event) => orderMode && event.preventDefault()}
+                                    onDrop={(event) => { event.stopPropagation(); void reorderMaterialGroup(category.id, group.key); }}
+                                >
+                                    {orderMode && <GripVertical size={17} />}
                                     <strong>{group.name}</strong>
-                                    <span>{group.items.length} ширин</span>
+                                    <span>{group.items.length} {group.items[0]?.kind === 'Ink' ? 'шт.' : 'ширин'}</span>
                                 </div>
                                 <div className="table-wrapper">
                                     <table className="data-table">
@@ -548,7 +619,12 @@ function StockRow({
             <td className={orderMode ? 'drag-cell' : undefined}>
                 {orderMode ? <GripVertical size={17} /> : <Lock size={14} />}
             </td>
-            <td><strong>{materialDisplayName(item)}</strong></td>
+            <td>
+                <span style={styles.materialNameWithColor}>
+                    {item.colorHex && <i style={{ ...styles.smallSwatch, background: item.colorHex }} title={item.colorName ?? 'Цвет'} />}
+                    <strong>{materialDisplayName(item)}</strong>
+                </span>
+            </td>
             <td>{item.article}</td>
             <QuantityCell item={item} value={item.currentQuantity} expected />
             <td>{formatNumber.format(item.minimumQuantity)} {unitLabel(item.unit)}</td>
@@ -606,7 +682,9 @@ function buildCategoryGroups(items: StockItem[]) {
             name: item.categoryName,
             materials: [],
         };
-        const normalizedName = normalizeMaterialName(item.materialName);
+        const normalizedName = item.kind === 'Ink'
+            ? (item.machineName?.trim() || 'Без станка')
+            : normalizeMaterialName(item.materialName);
         let material = category.materials.find(
             (group) => group.name.toLowerCase() === normalizedName.toLowerCase(),
         );
@@ -626,11 +704,24 @@ function buildCategoryGroups(items: StockItem[]) {
         ...category,
         materials: category.materials.map((material) => ({
             ...material,
-            items: material.items
-                .slice()
-                .sort((a, b) => Number(b.widthMeters ?? 0) - Number(a.widthMeters ?? 0)),
+            items: material.items.slice().sort((a, b) => a.kind === 'Ink'
+                ? inkColorOrder(a.colorName) - inkColorOrder(b.colorName) || Number(a.packageLiters ?? 0) - Number(b.packageLiters ?? 0)
+                : Number(b.widthMeters ?? 0) - Number(a.widthMeters ?? 0)),
         })),
     }));
+}
+
+function materialGroupKey(item: StockItem) {
+    const name = item.kind === 'Ink'
+        ? (item.machineName?.trim() || 'Без станка')
+        : normalizeMaterialName(item.materialName);
+    return `${item.categoryId}:${name.toLowerCase()}`;
+}
+
+function inkColorOrder(value?: string | null) {
+    return ['Cyan', 'Magenta', 'Yellow', 'Black', 'White'].indexOf(value ?? '') < 0
+        ? 99
+        : ['Cyan', 'Magenta', 'Yellow', 'Black', 'White'].indexOf(value ?? '');
 }
 
 function normalizeMaterialName(value: string) {
@@ -667,6 +758,7 @@ function unitLabel(unit: string) {
 const styles: Record<string, CSSProperties> = {
     stats: { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 14, marginBottom: 15 },
     toolbar: { display: 'flex', gap: 14, alignItems: 'center', justifyContent: 'space-between' },
+    categoryNav: { display: 'flex', gap: 9, alignItems: 'center', flexWrap: 'wrap', marginTop: 14 },
     searchBox: { display: 'flex', alignItems: 'center', gap: 10, minWidth: 320, flex: 1, color: '#7f8a9b' },
     searchInput: { width: '100%', border: 0, outline: 0, background: 'transparent', color: '#f5f7fb', font: 'inherit' },
     checkbox: { display: 'flex', gap: 8, alignItems: 'center', color: '#b8c0ce', fontSize: 14 },
@@ -684,6 +776,8 @@ const styles: Record<string, CSSProperties> = {
     materialGroupTitle: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 9, color: '#aeb8c7' },
     colorCell: { display: 'flex', alignItems: 'center', gap: 10 },
     swatch: { width: 28, height: 28, borderRadius: 7, border: '1px solid rgba(255,255,255,.22)', flex: '0 0 auto' },
+    smallSwatch: { width: 17, height: 17, borderRadius: 5, border: '1px solid rgba(255,255,255,.25)', flex: '0 0 auto' },
+    materialNameWithColor: { display: 'inline-flex', alignItems: 'center', gap: 8 },
     article: { display: 'block', color: '#778496', marginTop: 3 },
     statusOk: { color: '#54d99c', fontWeight: 700, fontSize: 13 },
     statusWarning: { color: '#ffb454', fontWeight: 700, fontSize: 13 },

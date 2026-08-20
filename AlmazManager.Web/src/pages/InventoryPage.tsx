@@ -33,6 +33,10 @@ type MaterialCatalogItem = {
     isActive: boolean;
     kind: string;
     widthMeters?: number | null;
+    colorName?: string | null;
+    colorHex?: string | null;
+    machineName?: string | null;
+    packageLiters?: number | null;
 };
 
 type InventoryRow = {
@@ -43,6 +47,10 @@ type InventoryRow = {
     categoryName: string;
     kind: string;
     widthMeters?: number | null;
+    colorName?: string | null;
+    colorHex?: string | null;
+    machineName?: string | null;
+    packageLiters?: number | null;
     expectedQuantity: number;
     actualQuantity: number;
     counted: boolean;
@@ -141,6 +149,11 @@ export default function InventoryPage() {
                         widthMeters:
                             material.widthMeters,
 
+                        colorName: material.colorName,
+                        colorHex: material.colorHex,
+                        machineName: material.machineName,
+                        packageLiters: material.packageLiters,
+
                         expectedQuantity:
                             material.currentQuantity,
 
@@ -180,10 +193,9 @@ export default function InventoryPage() {
                 >();
 
             for (const row of rows) {
-                const name =
-                    normalizeMaterialName(
-                        row.name,
-                    );
+                const name = row.kind === 'Ink'
+                    ? (row.machineName?.trim() || 'Без станка')
+                    : normalizeMaterialName(row.name);
 
                 const key =
                     `${row.categoryId}::${name.trim().toLowerCase()}`;
@@ -212,14 +224,9 @@ export default function InventoryPage() {
                             .slice()
                             .sort(
                                 (a, b) =>
-                                    Number(
-                                        b.widthMeters ??
-                                        0,
-                                    ) -
-                                    Number(
-                                        a.widthMeters ??
-                                        0,
-                                    ),
+                                    a.kind === 'Ink'
+                                        ? inkColorOrder(a.colorName) - inkColorOrder(b.colorName) || Number(a.packageLiters ?? 0) - Number(b.packageLiters ?? 0)
+                                        : Number(b.widthMeters ?? 0) - Number(a.widthMeters ?? 0),
                             ),
                 }))
                 .sort(
@@ -761,7 +768,7 @@ export default function InventoryPage() {
                                             group.rows
                                                 .length
                                         }{' '}
-                                        ширин
+                                        {group.rows[0]?.kind === 'Ink' ? 'шт.' : 'ширин'}
                                     </span>
                                 </div>
                             </div>
@@ -773,7 +780,7 @@ export default function InventoryPage() {
                                 }}
                             >
                                 <div>
-                                    Ширина
+                                    {group.rows[0]?.kind === 'Ink' ? 'Цвет' : 'Ширина'}
                                 </div>
 
                                 <div>
@@ -817,16 +824,17 @@ export default function InventoryPage() {
                                             }}
                                         >
                                             <div>
+                                                {row.colorHex && (
+                                                    <i style={{ display: 'inline-block', width: 16, height: 16, borderRadius: 5, marginRight: 8, verticalAlign: 'middle', background: row.colorHex, border: '1px solid rgba(127,127,127,.35)' }} />
+                                                )}
                                                 <strong
                                                     style={
                                                         styles.width
                                                     }
                                                 >
-                                                    {row.widthMeters
-                                                        ? formatWidth(
-                                                            row.widthMeters,
-                                                        )
-                                                        : '—'}
+                                                    {row.kind === 'Ink'
+                                                        ? `${row.colorName ?? 'Без цвета'} · ${row.packageLiters ?? '—'} л`
+                                                        : row.widthMeters ? formatWidth(row.widthMeters) : '—'}
                                                 </strong>
 
                                                 {filmMarkerText(row.categoryName) && (
@@ -922,7 +930,7 @@ export default function InventoryPage() {
                                                             styles.muted
                                                         }
                                                     >
-                                                        шт.
+                                                        {row.kind === 'Ink' ? 'л' : 'шт.'}
                                                     </span>
                                                 </div>
 
@@ -953,7 +961,7 @@ export default function InventoryPage() {
                                                 {numberFormatter.format(
                                                     row.expectedQuantity,
                                                 )}{' '}
-                                                шт.
+                                                {row.kind === 'Ink' ? 'л' : 'шт.'}
                                             </strong>
 
                                             <Difference
@@ -1224,6 +1232,12 @@ function normalizeMaterialName(
             '',
         )
         .trim();
+}
+
+function inkColorOrder(value?: string | null) {
+    const order = ['Cyan', 'Magenta', 'Yellow', 'Black', 'White'];
+    const index = order.indexOf(value ?? '');
+    return index < 0 ? 99 : index;
 }
 
 function formatWidth(
