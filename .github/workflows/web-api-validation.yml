@@ -1,0 +1,41 @@
+name: Web and API validation
+
+on:
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Build Web and API
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Restore and build API
+        run: dotnet build AlmazManager.slnx --configuration Release
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: AlmazManager.Web/package-lock.json
+
+      - name: Install Web dependencies
+        working-directory: AlmazManager.Web
+        run: npm ci
+
+      - name: Build Web
+        working-directory: AlmazManager.Web
+        run: npm run build
